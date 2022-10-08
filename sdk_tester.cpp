@@ -802,14 +802,7 @@ void updateRoiTestFunc(sdk::FlowSwitcherFlowId flowId) {
     int minY = startConfiguration.getPreprocessor().getRoi().minY();
     size_t maxY = startConfiguration.getPreprocessor().getRoi().maxY();
 
-    //checking default values are set properly - can delete it afrerwards
-    BOOST_TEST(conf.getRoi().getX() == 0);
-    BOOST_TEST(conf.getRoi().getY() == 0);
-    BOOST_TEST(conf.getRoi().getWidth() == 0);
-    BOOST_TEST(conf.getRoi().getHeight() == 0);
-
     BOOST_TEST_MESSAGE("Valid Roi update test");
-    // TODO - implement valid ROI update
     try{
         BOOST_TEST_MESSAGE("(X:100, Y:100, W:100, H:100)");
         conf.getRoi().setX(100);
@@ -828,33 +821,18 @@ void updateRoiTestFunc(sdk::FlowSwitcherFlowId flowId) {
 
     BOOST_TEST_MESSAGE("invalid ROI update test");
     BOOST_TEST_MESSAGE("Out of range ROI update");
-    //TODO - ASK Tom why at "first round" I get "out of range" err and second time forward I get "not registered" err ? is valid?
     try{
         BOOST_TEST_MESSAGE("X=" + std::to_string(minX - 1));
         errorCounter++;
-//        startConfiguration = getStartConfiguration();
-//        stream = mainPipeline->startStream(startConfiguration);
-//        std::cout << "The stream is: " + stream->getId().toString() << std::endl;
-//        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-//        CONF conf = getDetectorUpdateConfiguration(stream, (T) 1.0);
         conf.getRoi().setX(minX - 1);
     }
     catch (const sdk::Exception& e) {
-//        std::cout << (std::string) e.what() << std::endl;
         outOfRangeErrorTest((std::string) e.what(), minX, maxX);
-//        stream.reset();
     }
 
     try{
         BOOST_TEST_MESSAGE("X=" + std::to_string(maxX + 1));
         errorCounter++;
-//        startConfiguration = getStartConfiguration();
-//        startConfiguration.getFlowSwitcher().setFlowId(flowId);
-//        stream = mainPipeline->startStream(startConfiguration);
-//        std::cout << "The stream is: " + stream->getId().toString() << std::endl;
-//        waitForStreamStarted(stream);
-//        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-//        CONF conf = getDetectorUpdateConfiguration(stream, (T) 1.0);
         conf.getRoi().setX(maxX + 1);
     }
     catch (const sdk::Exception& e) {
@@ -915,7 +893,8 @@ void updateRoiTestFunc(sdk::FlowSwitcherFlowId flowId) {
         outOfRangeErrorTest(e.what(), minHeight, maxHeight);
     }
 
-//    BOOST_TEST_MESSAGE("Unsupported ROI update");
+    BOOST_TEST_MESSAGE("Unsupported ROI update");
+    // TODO - implement relevant test cases for unsupported ROI
     BOOST_TEST(errorCounter == 0, "Not all expected errors returned! Number of missed errors: " + std::to_string(errorCounter));
 }
 
@@ -1692,17 +1671,18 @@ BOOST_AUTO_TEST_CASE(flow_switcher) { // NOLINT
 BOOST_AUTO_TEST_SUITE(detector_configuration) // NOLINT
 
 BOOST_AUTO_TEST_CASE(detector_roi_start) {  // NOLINT
+        a_strVideoPath = seaMwirVideo;
         sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
-//            BOOST_TEST_MESSAGE("Sea Mwir detector ROI test");
         roiTestFunc<typeof(startConfiguration.getSeaMwirDetector()), int>(true, sdk::FlowSwitcherFlowId::SeaMwir);
-//            BOOST_TEST_MESSAGE("Ground MWIR detector ROI test");
+
         a_strVideoPath = groundMwirVideo;
         startConfiguration = getStartConfiguration();
         roiTestFunc<typeof(startConfiguration.getGroundMwirDetector()), float>(true, sdk::FlowSwitcherFlowId::GroundMwir);
-//            BOOST_TEST_MESSAGE("Ground RGB detector ROI test");
+
         a_strVideoPath = groundRgbVideo;
         startConfiguration = getStartConfiguration();
         roiTestFunc<typeof(startConfiguration.getGroundRgbSwirDetector()), double>(true, sdk::FlowSwitcherFlowId::GroundRgbAndSwir);
+
         a_strVideoPath = seaSwirVideo;
         startConfiguration = getStartConfiguration();
         roiTestFunc<typeof(startConfiguration.getSeaSwirDetector()), uint32_t>(true, sdk::FlowSwitcherFlowId::SeaSwir);
