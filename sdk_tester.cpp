@@ -72,6 +72,7 @@ std::map <sdk::FlowSwitcherFlowId, std::string> printFlow = {
 UserData data;
 streamError currentStreamError = streamError::NONE;
 rangeError currentRangeError = rangeError::None;
+std::string currentErrorStr;
 FrameDimensions currentFrameDimensions;
 Roi currentRoi;
 std::shared_ptr <sdk::Pipeline> mainPipeline;
@@ -192,17 +193,17 @@ void streamErrorTest(const std::string &errorCaught, const std::string &streamId
         switch (currentStreamError) {
             case streamError::RotateAngleUnsupported:
                 BOOST_TEST_MESSAGE("Rotate angle unsupported test --> " + streamId);
-                BOOST_TEST(errorCaught.find("Unsupported rotate angle") != std::string::npos);
+                BOOST_TEST(errorCaught.find(currentErrorStr) != std::string::npos);
                 errorCounter = errorCounter > 0 ? errorCounter - 1 : 0;
                 break;
             case streamError::RoiIncorrectSize:
                 BOOST_TEST_MESSAGE("ROI incorrect size test --> " + streamId);
-                BOOST_TEST(errorCaught.find("Unsupported roi") != std::string::npos); //TODO
+                BOOST_TEST(errorCaught.find(currentErrorStr) != std::string::npos); //TODO
                 errorCounter = errorCounter > 0 ? errorCounter - 1 : 0;
                 break;
             case streamError::PreviewError:
                 BOOST_TEST_MESSAGE("Preview error test --> " + streamId);
-                BOOST_TEST(errorCaught.find("Failed to open display; can't use CVPreview") != std::string::npos);
+                BOOST_TEST(errorCaught.find(currentErrorStr) != std::string::npos);
                 errorCounter = errorCounter > 0 ? errorCounter - 1 : 0;
                 break;
             default:
@@ -314,7 +315,7 @@ void run() {
     rotateAngleNotInRange = "is not in range of 0 and 270";
     rotateAngleUnsupported = "Unsupported rotate angle";
     ROINotInRange = "is not in range of 0 and 8192";
-    ROIUnsupported = "Unsupported roi";
+    ROIUnsupported = "Invalid ROI";
     previewError = "Failed to open display; can't use CVPreview";
     currentRangeError = rangeError::None;
     a_strVideoPath = seaMwirVideo;
@@ -546,7 +547,7 @@ void waitForStreamStarted(const std::shared_ptr<sdk::Stream> &stream) {
 sdk::StartStreamConfiguration getStartConfiguration(const std::string &customSettings = "stream_settings.bin") {
     sdk::StartStreamConfiguration startConfiguration = mainPipeline->createStartStreamConfiguration(customSettings);
     startConfiguration.getRawSource();
-    startConfiguration.getRawSource().setReadTimeoutInSec(20);
+    startConfiguration.getRawSource().setReadTimeoutInSec(20); // TODO(NOTE) - it was 20;
     startConfiguration.getGstSink().setUrl(sinkStr);
     return startConfiguration;
 }
@@ -744,7 +745,7 @@ void roiTestFunc(bool isUpdate, sdk::FlowSwitcherFlowId flowId) {
         CONF conf = getDetectorConfiguration(startConfiguration, (T) 1.0);
         conf.getRoi().setX(100);
         conf.getRoi().setWidth((uint32_t)(100 + currentFrameDimensions.Width));
-//        conf.getRoi().setHeight(1);  // uncomment to avoid error at end of test
+        conf.getRoi().setHeight(1);  // uncomment to avoid error at end of test
         errorCounter++;
         std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConfiguration);
         waitForStreamStarted(stream);
@@ -766,7 +767,7 @@ void roiTestFunc(bool isUpdate, sdk::FlowSwitcherFlowId flowId) {
         CONF conf = getDetectorConfiguration(startConfiguration, (T) 1.0);
         conf.getRoi().setY(100);
         conf.getRoi().setHeight((uint32_t)(100 + currentFrameDimensions.Height));
-//        conf.getRoi().setWidth(1); // uncomment to avoid error at end of test
+        conf.getRoi().setWidth(1); // uncomment to avoid error at end of test
         errorCounter++;
         std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConfiguration);
         waitForStreamStarted(stream);
@@ -809,17 +810,18 @@ void updateRoiTestFunc(sdk::FlowSwitcherFlowId flowId) {
         conf.getRoi().setY(100);
         conf.getRoi().setWidth(100);
         conf.getRoi().setHeight(100);
-        stream->update();
-        BOOST_TEST(conf.getRoi().getX() == 100);
-        BOOST_TEST(conf.getRoi().getY() == 100);
-        BOOST_TEST(conf.getRoi().getWidth() == 100);
-        BOOST_TEST(conf.getRoi().getHeight() == 100);
+
+        sendFrames(stream, 20, [&stream](uint32_t nFrameId){
+           if (nFrameId == 5)
+               stream->update();
+        });
     }
     catch (const sdk::Exception& e) {
+        errorCounter++;
         std::cerr << "Caught unexpected error: " + (std::string) e.what() << std::endl;
     }
 
-    BOOST_TEST_MESSAGE("invalid ROI update test");
+    BOOST_TEST_MESSAGE("invalid ROI update test:");
     BOOST_TEST_MESSAGE("Out of range ROI update");
     try{
         BOOST_TEST_MESSAGE("X=" + std::to_string(minX - 1));
@@ -894,7 +896,122 @@ void updateRoiTestFunc(sdk::FlowSwitcherFlowId flowId) {
     }
 
     BOOST_TEST_MESSAGE("Unsupported ROI update");
-    // TODO - implement relevant test cases for unsupported ROI
+    /*
+     * Width out of frame
+     * */
+    try{
+        currentStreamError = streamError::RoiIncorrectSize;
+        errorCounter++;
+        currentErrorStr = ROIUnsupported;
+        std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+
+        startConfiguration = getStartConfiguration();
+        startConfiguration.getFlowSwitcher().setFlowId(flowId);
+        startConfiguration.getRenderer().getOsd().setSkipRendering(true);
+        stream = mainPipeline->startStream(startConfiguration);
+        waitForStreamStarted(stream);
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+        conf = getDetectorUpdateConfiguration(stream, (T) 1.0);
+
+        sendFrames(stream, 20, [&stream, &conf](uint32_t nFrameId){
+           if(nFrameId == 5){
+               conf.getRoi().setX(100);
+               conf.getRoi().setWidth((uint32_t)(100 + currentFrameDimensions.Width));
+               conf.getRoi().setHeight(1); // TODO(NOTE) - same behaviour as startConf ROI (when width/height out of frame we need height/width to be greater than 0)
+               stream->update();
+           }
+        });
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+
+
+    }
+    catch (const sdk::Exception& e) {
+        std::cerr << "Caught unexpected error: " + (std::string) e.what() << std::endl;
+    }
+    /*
+     * Height out of frame
+     * */
+    try{
+        currentStreamError = streamError::RoiIncorrectSize;
+        errorCounter++;
+        currentErrorStr = ROIUnsupported;
+        std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+
+        startConfiguration = getStartConfiguration();
+        startConfiguration.getFlowSwitcher().setFlowId(flowId);
+        startConfiguration.getRenderer().getOsd().setSkipRendering(true);
+        stream = mainPipeline->startStream(startConfiguration);
+        waitForStreamStarted(stream);
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+        conf = getDetectorUpdateConfiguration(stream, (T) 1.0);
+
+        sendFrames(stream, 20, [&stream, &conf](uint32_t nFrameId){
+            if(nFrameId == 5){
+                conf.getRoi().setY(100);
+                conf.getRoi().setHeight((uint32_t)(100 + currentFrameDimensions.Height));
+                conf.getRoi().setWidth(1); // TODO(NOTE) - same behaviour as startConf ROI
+                stream->update();
+            }
+        });
+    }
+    catch (const sdk::Exception& e) {
+        std::cerr << "Caught unexpected error: " + (std::string) e.what() << std::endl;
+    }
+    /*
+     * X out of frame */
+    try{
+        currentStreamError = streamError::RoiIncorrectSize; // TODO - go to onStreamEvent func
+        errorCounter++;
+        currentErrorStr = ROIUnsupported;
+        std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+
+        startConfiguration = getStartConfiguration();
+        startConfiguration.getFlowSwitcher().setFlowId(flowId);
+        startConfiguration.getRenderer().getOsd().setSkipRendering(true);
+        stream = mainPipeline->startStream(startConfiguration);
+        waitForStreamStarted(stream);
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+        conf = getDetectorUpdateConfiguration(stream, (T) 1.0);
+
+        sendFrames(stream, 20, [&stream, &conf](uint32_t nFrameId){
+            if(nFrameId == 5){
+                conf.getRoi().setX((uint32_t)(100 + currentFrameDimensions.Width));
+//                conf.getRoi().setY(1);
+                stream->update();
+            }
+        });
+    }
+    catch (const sdk::Exception& e) {
+        std::cerr << "Caught unexpected error: " + (std::string) e.what() << std::endl;
+    }
+    /*
+     * Y out of frame
+     * */
+    try{
+        currentStreamError = streamError::RoiIncorrectSize;
+        errorCounter++;
+        currentErrorStr = ROIUnsupported;
+        std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+
+        startConfiguration = getStartConfiguration();
+        startConfiguration.getFlowSwitcher().setFlowId(flowId);
+        startConfiguration.getRenderer().getOsd().setSkipRendering(true);
+        stream = mainPipeline->startStream(startConfiguration);
+        waitForStreamStarted(stream);
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+        conf = getDetectorUpdateConfiguration(stream, (T) 1.0);
+
+        sendFrames(stream, 20, [&stream, &conf](uint32_t nFrameId){
+            if(nFrameId == 5){
+                conf.getRoi().setY((uint32_t)(1 + currentFrameDimensions.Height));
+                stream->update();
+            }
+        });
+    }
+    catch (const sdk::Exception& e) {
+        std::cerr << "Caught unexpected error: " + (std::string) e.what() << std::endl;
+    }
     BOOST_TEST(errorCounter == 0, "Not all expected errors returned! Number of missed errors: " + std::to_string(errorCounter));
 }
 
@@ -1505,14 +1622,14 @@ BOOST_AUTO_TEST_SUITE(invalid_rotate_angle) // NOLINT
     }
     BOOST_AUTO_TEST_CASE(rotate_angle_unsupported) { // NOLINT
         std::this_thread::sleep_for(std::chrono::milliseconds(2000));
-        sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
+        sdk::StartStreamConfiguration startConfiguration; // = getStartConfiguration();
 
         BOOST_TEST_MESSAGE("Invalid rotate angle - Unsupported test");
         int angle;
         for (int i = 0; i < 9; i++) {
             try {
                 currentStreamError = streamError::RotateAngleUnsupported;
-                std::string currentErrorStr = rotateAngleUnsupported;
+                currentErrorStr = rotateAngleUnsupported;
                 std::this_thread::sleep_for(std::chrono::milliseconds(2000));
                 angle = (int) (random() % 270) + 1;
                 BOOST_TEST_MESSAGE(angle);
@@ -1547,66 +1664,14 @@ BOOST_AUTO_TEST_CASE(preprocessor_roi){ // no unsupported?
 }
 
 // TODO - write the threshold test func (same logic as ROI test)
-//BOOST_AUTO_TEST_SUITE(threshold)
-//
-//BOOST_AUTO_TEST_CASE(valid_threshold){
-//
-//}
-//BOOST_AUTO_TEST_SUITE_END() // NOLINT threshold
+BOOST_AUTO_TEST_SUITE(threshold)
+BOOST_AUTO_TEST_CASE(valid_threshold){
+    sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
+
+}
+BOOST_AUTO_TEST_SUITE_END() // NOLINT threshold
 
 
-//        BOOST_AUTO_TEST_CASE(rotate_angle_update) { // NOLINT
-//            errorCounter = 0;
-//            currentStreamError = streamError::NONE;
-//            // boost::unit_test::unit_test_log.set_threshold_level(boost::unit_test::log_messages);
-//            sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
-//            BOOST_TEST_MESSAGE("Rotate angle update test");
-//            BOOST_TEST_MESSAGE("Valid angle");
-//            std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConfiguration);
-//            waitForStreamStarted(stream);
-//            BOOST_TEST(stream->getConfiguration().getPreprocessor().getRotateAngle() == 0);
-//            int angle;
-//            for (int i = 1; i < 4; i++) {
-//                angle = i * 90;
-//                stream->getConfiguration().getPreprocessor().setRotateAngle(angle);
-//                stream->update();
-//                std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-//                BOOST_TEST(stream->getConfiguration().getPreprocessor().getRotateAngle() == angle);
-//            }
-//            stream.reset();
-//            BOOST_TEST_MESSAGE("Invalid angle");
-//
-//            for (int i = 0; i < 10; i++) {
-//                currentStreamError = streamError::RotateAngleNotInRange;
-//                angle = (int) (random() % 360) + 1;
-//                BOOST_TEST_MESSAGE(angle);
-//                std::this_thread::sleep_for(std::chrono::milliseconds(2000));
-//                startConfiguration = getStartConfiguration();
-//                std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-//                errorCounter++;
-//                stream = mainPipeline->startStream(startConfiguration);
-//                if (angle <= 270) {
-//                    currentStreamError = streamError::RotateAngleUnsupported;
-//                }
-//                else if (angle == 90 || angle == 180 || angle == 270) {
-//                    errorCounter = errorCounter > 0 ? errorCounter - 1 : 0;
-//                    continue;
-//                }
-//                waitForStreamStarted(stream);
-//                sendFrames(stream, 30,
-//                    [&angle, &stream](uint32_t nFrameId) {
-//                        if (nFrameId == 5) {
-//                            stream->getConfiguration().getPreprocessor().setRotateAngle(angle);
-//                            stream->update();
-//                        }
-//                    }
-//                );
-//
-//            }
-//            stream.reset();
-//            currentStreamError = streamError::NONE;
-//            BOOST_TEST(errorCounter == 0, "Not all expected errors returned! Number of missed errors: " + std::to_string(errorCounter));
-//        }
 
 //BOOST_AUTO_TEST_CASE(preprocessor_roi) { // NOLINT
 //        sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
@@ -1709,56 +1774,37 @@ BOOST_AUTO_TEST_CASE(detector_groups) { // NOLINT
         BOOST_TEST_MESSAGE("Starting detector groups test");
         try {
             a_strVideoPath = seaMwirVideo;
-            sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
-            std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConfiguration);
-            thresholdTestFunc<typeof(stream->getConfiguration().getSeaMwirDetector()), int>(
-                    seaGroups, sdk::FlowSwitcherFlowId::SeaMwir);
+            thresholdTestFunc<typeof(sdk::SeaMwirDetectorUpdateStreamConfiguration), int>(seaGroups, sdk::FlowSwitcherFlowId::SeaMwir);
         }
         catch (sdk::Exception& e) {
-            BOOST_TEST(((std::string) e.what()).find("not registered") != std::string::npos,
-                       "Caught unexpected error: " + (std::string) e.what());
+            BOOST_TEST(((std::string) e.what()).find("not registered") != std::string::npos, "Caught unexpected error: " + (std::string) e.what());
         }
 
         std::this_thread::sleep_for(std::chrono::milliseconds(5000));
         try {
             a_strVideoPath = groundMwirVideo;
-            sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
-//                startConfiguration.getFlowSwitcher().setFlowId(sdk::FlowSwitcherFlowId::GroundMwir);
-            std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConfiguration);
-            thresholdTestFunc<typeof(stream->getConfiguration().getGroundMwirDetector()), float>(
-                    groundGroups, sdk::FlowSwitcherFlowId::GroundMwir);
+            thresholdTestFunc<typeof(sdk::GroundMwirDetectorUpdateStreamConfiguration), float>(groundGroups, sdk::FlowSwitcherFlowId::GroundMwir);
         }
         catch (sdk::Exception& e) {
-            BOOST_TEST(((std::string) e.what()).find("not registered") != std::string::npos,
-                       "Caught unexpected error: " + (std::string) e.what());
+            BOOST_TEST(((std::string) e.what()).find("not registered") != std::string::npos, "Caught unexpected error: " + (std::string) e.what());
         }
 
         std::this_thread::sleep_for(std::chrono::milliseconds(5000));
         try {
             a_strVideoPath = groundRgbVideo;
-            sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
-//                startConfiguration.getFlowSwitcher().setFlowId(sdk::FlowSwitcherFlowId::GroundRgbAndSwir);
-            std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConfiguration);
-            thresholdTestFunc<typeof(stream->getConfiguration().getGroundRgbSwirDetector()), double>(
-                    groundGroups, sdk::FlowSwitcherFlowId::GroundRgbAndSwir);
+            thresholdTestFunc<typeof(sdk::GroundRgbSwirDetectorUpdateStreamConfiguration), double>(groundGroups, sdk::FlowSwitcherFlowId::GroundRgbAndSwir);
         }
         catch (sdk::Exception& e) {
-            BOOST_TEST(((std::string) e.what()).find("not registered") != std::string::npos,
-                       "Caught unexpected error: " + (std::string) e.what());
+            BOOST_TEST(((std::string) e.what()).find("not registered") != std::string::npos, "Caught unexpected error: " + (std::string) e.what());
         }
 
         std::this_thread::sleep_for(std::chrono::milliseconds(5000));
         try {
             a_strVideoPath = seaSwirVideo;
-            sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
-//                startConfiguration.getFlowSwitcher().setFlowId(sdk::FlowSwitcherFlowId::SeaSwir);
-            std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConfiguration);
-            thresholdTestFunc<typeof(stream->getConfiguration().getSeaSwirDetector()), uint32_t>(
-                    seaGroups, sdk::FlowSwitcherFlowId::SeaSwir);
+            thresholdTestFunc<typeof(sdk::SeaSwirDetectorUpdateStreamConfiguration), uint32_t>(seaGroups, sdk::FlowSwitcherFlowId::SeaSwir);
         }
         catch (sdk::Exception& e) {
-            BOOST_TEST(((std::string) e.what()).find("not registered") != std::string::npos,
-                       "Caught unexpected error: " + (std::string) e.what());
+            BOOST_TEST(((std::string) e.what()).find("not registered") != std::string::npos, "Caught unexpected error: " + (std::string) e.what());
         }
 }
 
