@@ -218,7 +218,7 @@ void streamErrorTest(const std::string &errorCaught, const std::string &streamId
     currentStreamError = streamError::NONE;
 }
 
-void outOfRangeErrorTest(const std::string &errorMsg, int minVal, float maxVal) {
+void outOfRangeErrorTest(const std::string &errorMsg, int minVal, int maxVal) {
     std::string rangeStr;
     if(currentRangeError == rangeError::Threshold)
         rangeStr = "is not in range of";
@@ -1155,6 +1155,318 @@ void thresholdTestFunc(const std::array<std::string, 4> &groups, sdk::FlowSwitch
 }
 
 template<typename CONF, typename T>
+void minMaxTestFunc(const std::array<std::string, 4>& groups, sdk::FlowSwitcherFlowId flowId){
+    std::cout << printFlow[flowId] << std::endl;
+    errorCounter = 0;
+
+    for (const std::string &group: groups){
+        sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
+        CONF conf = getDetectorConfiguration(startConfiguration, (T)1.0);
+
+        if(group == "None")
+            break;
+        BOOST_TEST_MESSAGE("Testing group: " + group);
+        BOOST_TEST_MESSAGE("Valid test");
+        try{
+            float minVal = (float) (random() % 501);
+            float maxVal = (float) ((random() % 501) + 500);
+
+            BOOST_TEST_MESSAGE("min value = " + std::to_string(minVal));
+            BOOST_TEST_MESSAGE("max value = " + std::to_string(maxVal));
+
+            conf.getGroups(group).setMinWidth(minVal);
+            conf.getGroups(group).setMaxWidth(maxVal);
+            conf.getGroups(group).setMinHeight(minVal);
+            conf.getGroups(group).setMaxHeight(maxVal);
+            conf.getGroups(group).setMinAspectRatio(minVal);
+            conf.getGroups(group).setMaxAspectRatio(maxVal);
+
+            BOOST_TEST(conf.getGroups(group).getMinWidth() == minVal);
+            BOOST_TEST(conf.getGroups(group).getMaxWidth() == maxVal);
+            BOOST_TEST(conf.getGroups(group).getMinHeight() == minVal);
+            BOOST_TEST(conf.getGroups(group).getMaxHeight() == maxVal);
+            BOOST_TEST(conf.getGroups(group).getMinAspectRatio() == minVal);
+            BOOST_TEST(conf.getGroups(group).getMaxAspectRatio() == maxVal);
+
+            startConfiguration.getFlowSwitcher().setFlowId(flowId);
+            std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConfiguration);
+            waitForStreamStarted(stream);
+            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+            sendFrames(stream, 20, nullptr);
+        }
+        catch (const sdk::Exception& e) {
+            std::cerr << "Caught unexpected error: " + (std::string) e.what() << std::endl;
+        }
+
+        BOOST_TEST_MESSAGE("Out of range min/max");
+        /*
+         * group's min/max Width
+         * */
+        try {
+            startConfiguration = getStartConfiguration();
+//            CONF conf = getDetectorConfiguration(startConfiguration, (T) 1.0); // TODO - delete if works withouth
+            conf = getDetectorConfiguration(startConfiguration, (T) 1.0);
+            BOOST_TEST_MESSAGE("minWidth = " + std::to_string(conf.getGroups(group).minMinWidth() - 1));
+            errorCounter++;
+//            currentRangeError = rangeError::Threshold; // TODO - check afterwards if need add rangeError::min/max to outOfRangeFunc
+            conf.getGroups(group).setMinWidth(conf.getGroups(group).minMinWidth() - 1);
+        }
+        catch (const sdk::Exception& e) {
+            outOfRangeErrorTest((std::string) e.what(), conf.getGroups(group).minMinWidth(), conf.getGroups(group).maxMinWidth());
+        }
+
+        try {
+            startConfiguration = getStartConfiguration();
+            conf = getDetectorConfiguration(startConfiguration, (T) 1.0);
+            BOOST_TEST_MESSAGE("minWidth = " + std::to_string(conf.getGroups(group).maxMinWidth() + 1));
+            errorCounter++;
+            conf.getGroups(group).setMinWidth(conf.getGroups(group).maxMinWidth() + 1);
+        }
+        catch (const sdk::Exception& e) {
+            outOfRangeErrorTest((std::string) e.what(), conf.getGroups(group).minMinWidth(), conf.getGroups(group).maxMinWidth());
+        }
+
+        try {
+            startConfiguration = getStartConfiguration();
+            conf = getDetectorConfiguration(startConfiguration, (T) 1.0);
+            BOOST_TEST_MESSAGE("maxWidth = " + std::to_string(conf.getGroups(group).minMaxWidth() - 1));
+            errorCounter++;
+            conf.getGroups(group).setMaxWidth(conf.getGroups(group).minMaxWidth() - 1);
+        }
+        catch (const sdk::Exception& e) {
+            outOfRangeErrorTest((std::string) e.what(), conf.getGroups(group).minMaxWidth(), conf.getGroups(group).maxMaxWidth());
+        }
+
+        try {
+            startConfiguration = getStartConfiguration();
+            conf = getDetectorConfiguration(startConfiguration, (T) 1.0);
+            BOOST_TEST_MESSAGE("maxWidth = " + std::to_string(conf.getGroups(group).maxMaxWidth() + 1));
+            errorCounter++;
+            conf.getGroups(group).setMaxWidth(conf.getGroups(group).maxMaxWidth() + 1);
+        }
+        catch (const sdk::Exception& e) {
+            outOfRangeErrorTest((std::string) e.what(), conf.getGroups(group).minMaxWidth(), conf.getGroups(group).maxMaxWidth());
+        }
+        /*
+         * group's min/max Height
+         * */
+        try {
+            startConfiguration = getStartConfiguration();
+            conf = getDetectorConfiguration(startConfiguration, (T) 1.0);
+            BOOST_TEST_MESSAGE("minHeight = " + std::to_string(conf.getGroups(group).minMinHeight() - 1));
+            errorCounter++;
+            conf.getGroups(group).setMinHeight(conf.getGroups(group).minMinHeight() - 1);
+        }
+        catch (const sdk::Exception& e) {
+            outOfRangeErrorTest((std::string) e.what(), conf.getGroups(group).minMinHeight(), conf.getGroups(group).maxMinHeight());
+        }
+
+        try {
+            startConfiguration = getStartConfiguration();
+            conf = getDetectorConfiguration(startConfiguration, (T) 1.0);
+            BOOST_TEST_MESSAGE("minHeight = " + std::to_string(conf.getGroups(group).maxMinHeight() + 1));
+            errorCounter++;
+            conf.getGroups(group).setMinHeight(conf.getGroups(group).maxMinHeight() + 1);
+        }
+        catch (const sdk::Exception& e) {
+            outOfRangeErrorTest((std::string) e.what(), conf.getGroups(group).minMinWidth(), conf.getGroups(group).maxMinWidth());
+        }
+
+        try {
+            startConfiguration = getStartConfiguration();
+            conf = getDetectorConfiguration(startConfiguration, (T) 1.0);
+            BOOST_TEST_MESSAGE("maxHeight = " + std::to_string(conf.getGroups(group).minMaxHeight() - 1));
+            errorCounter++;
+            conf.getGroups(group).setMaxHeight(conf.getGroups(group).minMaxHeight() - 1);
+        }
+        catch (const sdk::Exception& e) {
+            outOfRangeErrorTest((std::string) e.what(), conf.getGroups(group).minMaxHeight(), conf.getGroups(group).maxMaxHeight());
+        }
+
+        try {
+            startConfiguration = getStartConfiguration();
+            conf = getDetectorConfiguration(startConfiguration, (T) 1.0);
+            BOOST_TEST_MESSAGE("maxHeight = " + std::to_string(conf.getGroups(group).maxMaxHeight() + 1));
+            errorCounter++;
+            conf.getGroups(group).setMaxHeight(conf.getGroups(group).maxMaxHeight() + 1);
+        }
+        catch (const sdk::Exception& e) {
+            outOfRangeErrorTest((std::string) e.what(), conf.getGroups(group).minMaxHeight(), conf.getGroups(group).maxMaxHeight());
+        }
+        /*
+         * group's min/max AspectRatio
+         * */
+        try {
+            startConfiguration = getStartConfiguration();
+            conf = getDetectorConfiguration(startConfiguration, (T) 1.0);
+            BOOST_TEST_MESSAGE("minAspectRatio = " + std::to_string(conf.getGroups(group).minMinAspectRatio() - 1));
+            errorCounter++;
+            conf.getGroups(group).setMinAspectRatio(conf.getGroups(group).minMinHeight() - 1);
+        }
+        catch (const sdk::Exception& e) {
+            outOfRangeErrorTest((std::string) e.what(), conf.getGroups(group).minMinAspectRatio(), conf.getGroups(group).maxMinAspectRatio());
+        }
+
+        try {
+            startConfiguration = getStartConfiguration();
+            conf = getDetectorConfiguration(startConfiguration, (T) 1.0);
+            BOOST_TEST_MESSAGE("minAspectRatio = " + std::to_string(conf.getGroups(group).maxMinAspectRatio() + 1));
+            errorCounter++;
+            conf.getGroups(group).setMinAspectRatio(conf.getGroups(group).maxMinAspectRatio() + 1);
+        }
+        catch (const sdk::Exception& e) {
+            outOfRangeErrorTest((std::string) e.what(), conf.getGroups(group).minMinAspectRatio(), conf.getGroups(group).maxMinAspectRatio());
+        }
+
+        try {
+            startConfiguration = getStartConfiguration();
+            conf = getDetectorConfiguration(startConfiguration, (T) 1.0);
+            BOOST_TEST_MESSAGE("maxAspectRatio = " + std::to_string(conf.getGroups(group).minMaxAspectRatio() - 1));
+            errorCounter++;
+            conf.getGroups(group).setMaxAspectRatio(conf.getGroups(group).minMaxAspectRatio() - 1);
+        }
+        catch (const sdk::Exception& e) {
+            outOfRangeErrorTest((std::string) e.what(), conf.getGroups(group).minMaxAspectRatio(), conf.getGroups(group).maxMaxAspectRatio());
+        }
+
+        try {
+            startConfiguration = getStartConfiguration();
+            conf = getDetectorConfiguration(startConfiguration, (T) 1.0);
+            BOOST_TEST_MESSAGE("maxAspectRatio = " + std::to_string(conf.getGroups(group).maxMaxAspectRatio() + 1));
+            errorCounter++;
+            conf.getGroups(group).setMaxAspectRatio(conf.getGroups(group).maxMaxAspectRatio() + 1);
+        }
+        catch (const sdk::Exception& e) {
+            outOfRangeErrorTest((std::string) e.what(), conf.getGroups(group).minMaxAspectRatio(), conf.getGroups(group).maxMaxAspectRatio());
+        }
+
+        BOOST_TEST(errorCounter == 0, "Not all expected errors returned! Number of missed errors: " + std::to_string(errorCounter));
+        errorCounter = 0;
+    }
+}
+
+template<typename CONF, typename T>
+void trackerRateTestFunc(sdk::FlowSwitcherFlowId flowId){
+    std::cout << printFlow[flowId] << std::endl;
+    errorCounter = 0;
+
+    sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
+    startConfiguration.getFlowSwitcher().setFlowId(flowId);
+    CONF conf = getTrackerRateStartConfiguration(startConfiguration, (T) 1.0);
+
+    BOOST_TEST_MESSAGE("Valid test");
+    for(int i=0; i<3; i++) {
+        try {
+            uint32_t rate = (uint32_t) (random() % 1001);
+            BOOST_TEST_MESSAGE(rate);
+            conf.setOutputFramerate(rate);
+            std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConfiguration);
+            waitForStreamStarted(stream);
+            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+            sendFrames(stream, 20, [&conf, &rate](uint32_t nFrameId){
+                if(nFrameId == 5)
+                    BOOST_TEST(conf.getOutputFramerate() == rate);
+            });
+        }
+        catch (const sdk::Exception &e) {
+            std::cerr << "Caught unexpected error: " + (std::string) e.what() << std::endl;
+        }
+    }
+
+    BOOST_TEST_MESSAGE("Out of range test");
+    try{
+        errorCounter++;
+        BOOST_TEST_MESSAGE("Tracker rate = " + std::to_string((int)conf.minOutputFramerate() -1));
+        startConfiguration = getStartConfiguration();
+        conf = getTrackerRateStartConfiguration(startConfiguration, (T) 1.0);
+        conf.setOutputFramerate(conf.minOutputFramerate() -1);
+    }
+    catch (const sdk::Exception& e) {
+        outOfRangeErrorTest((std::string)e.what(), conf.minOutputFramerate(), conf.maxOutputFramerate());
+    }
+
+    try{
+        errorCounter++;
+        BOOST_TEST_MESSAGE("Tracker rate = " + std::to_string(conf.maxOutputFramerate() + 1));
+        startConfiguration = getStartConfiguration();
+        conf = getTrackerRateStartConfiguration(startConfiguration, (T) 1.0);
+        conf.setOutputFramerate(conf.maxOutputFramerate() + 1);
+    }
+    catch (const sdk::Exception& e) {
+        outOfRangeErrorTest((std::string)e.what(), conf.minOutputFramerate(), conf.maxOutputFramerate());
+    }
+
+    BOOST_TEST_MESSAGE("Update test");
+    try{
+        startConfiguration = getStartConfiguration();
+        startConfiguration.getFlowSwitcher().setFlowId(flowId);
+        std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConfiguration);
+        waitForStreamStarted(stream);
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+        auto conf = getTrackerRateUpdateConfiguration(stream, (T) 1.0);
+        uint32_t rate;
+
+        sendFrames(stream, 300, [&stream, &conf, &rate](uint32_t nFrameId){
+            switch(nFrameId){
+                case 50:
+                    rate = (uint32_t) (random() % 1001);
+                    BOOST_TEST_MESSAGE(rate);
+                    conf.setOutputFramerate(rate);
+                    stream->update();
+                    BOOST_TEST(conf.getOutputFramerate() == rate);
+                    break;
+                case 100:
+                    rate = (uint32_t) (random() % 1001);
+                    BOOST_TEST_MESSAGE(rate);
+                    conf.setOutputFramerate(rate);
+                    stream->update();
+                    BOOST_TEST(conf.getOutputFramerate() == rate);
+                    break;
+                case 150:
+                    rate = (uint32_t) (random() % 1001);
+                    BOOST_TEST_MESSAGE(rate);
+                    conf.setOutputFramerate(rate);
+                    stream->update();
+                    BOOST_TEST(conf.getOutputFramerate() == rate);
+                    break;
+                case 200:
+                    try{
+                        errorCounter++;
+                        conf.setOutputFramerate(conf.minOutputFramerate() - 1);
+//                        stream->update();
+                    }
+                    catch (const sdk::Exception& e) {
+                        outOfRangeErrorTest((std::string)e.what(), conf.minOutputFramerate(), conf.maxOutputFramerate());
+                    }
+                case 225:
+                    BOOST_TEST_MESSAGE("Updating to out of range values...");
+                    try{
+                        errorCounter++;
+                        conf.setOutputFramerate(conf.maxOutputFramerate() + 1);
+//                        stream->update();
+                    }
+                    catch (const sdk::Exception& e) {
+                        outOfRangeErrorTest((std::string)e.what(), conf.minOutputFramerate(), conf.maxOutputFramerate());
+                    }
+                case 250:
+            }
+        });
+
+    }
+    catch (const sdk::Exception& e) {
+        std::cerr << "Caught unexpected error: " + (std::string) e.what() << std::endl;
+    }
+}
+
+template<typename CONF, typename T>
+void trackerTestFunc(sdk::FlowSwitcherFlowId flowId){
+    std::cout << printFlow[flowId] << std::endl;
+    errorCounter = 0;
+
+
+}
+
+template<typename CONF, typename T>
 void postprocessorTestFunc(const std::array<std::string, 4> &groups) {
     BOOST_TEST_MESSAGE("Postprocessor test");
     sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
@@ -1711,20 +2023,6 @@ BOOST_AUTO_TEST_CASE(preprocessor_roi){ // no unsupported?
     roiTestFunc<typeof(startConfiguration.getPreprocessor()), size_t>(false, sdk::FlowSwitcherFlowId::Unspecified);
 }
 
-// TODO - write the threshold test func (same logic as ROI test)
-BOOST_AUTO_TEST_SUITE(threshold)
-BOOST_AUTO_TEST_CASE(valid_threshold){
-    sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
-
-}
-BOOST_AUTO_TEST_SUITE_END() // NOLINT threshold
-
-
-
-//BOOST_AUTO_TEST_CASE(preprocessor_roi) { // NOLINT
-//        sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
-//        roiTestFunc<typeof(startConfiguration.getPreprocessor()), size_t>(false, sdk::FlowSwitcherFlowId::SeaMwir);
-//}
 
 BOOST_AUTO_TEST_CASE(flow_switcher) { // NOLINT
         try {
@@ -1736,40 +2034,29 @@ BOOST_AUTO_TEST_CASE(flow_switcher) { // NOLINT
             sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
             std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConfiguration);
             waitForStreamStarted(stream);
-            sendFrames(stream, 1000, nullptr);
+            sendFrames(stream, 100, nullptr);
             sendFrames(stream, 50,
                        [&stream](uint32_t nFrameId) {
                            if (nFrameId == 10) {
                                BOOST_TEST_MESSAGE(stream->getConfiguration().getFlowSwitcher().getFlowId());
-                               stream->getConfiguration().getFlowSwitcher().setFlowId(
-                                       sdk::FlowSwitcherFlowId::GroundMwir);
+                               stream->getConfiguration().getFlowSwitcher().setFlowId(sdk::FlowSwitcherFlowId::GroundMwir);
                                stream->update();
-                               BOOST_TEST_MESSAGE(stream->getConfiguration().getFlowSwitcher().getFlowId());
-                               BOOST_TEST(stream->getConfiguration().getFlowSwitcher().getFlowId() ==
-                                          sdk::FlowSwitcherFlowId::GroundMwir);
-
+                               BOOST_TEST(stream->getConfiguration().getFlowSwitcher().getFlowId() == sdk::FlowSwitcherFlowId::GroundMwir);
                            } else if (nFrameId == 20) {
                                BOOST_TEST_MESSAGE(stream->getConfiguration().getFlowSwitcher().getFlowId());
-                               stream->getConfiguration().getFlowSwitcher().setFlowId(
-                                       sdk::FlowSwitcherFlowId::GroundRgbAndSwir);
+                               stream->getConfiguration().getFlowSwitcher().setFlowId(sdk::FlowSwitcherFlowId::GroundRgbAndSwir);
                                stream->update();
-                               BOOST_TEST_MESSAGE(stream->getConfiguration().getFlowSwitcher().getFlowId());
-                               BOOST_TEST(stream->getConfiguration().getFlowSwitcher().getFlowId() ==
-                                          sdk::FlowSwitcherFlowId::GroundRgbAndSwir);
+                               BOOST_TEST(stream->getConfiguration().getFlowSwitcher().getFlowId() == sdk::FlowSwitcherFlowId::GroundRgbAndSwir);
                            } else if (nFrameId == 30) {
                                BOOST_TEST_MESSAGE(stream->getConfiguration().getFlowSwitcher().getFlowId());
                                stream->getConfiguration().getFlowSwitcher().setFlowId(sdk::FlowSwitcherFlowId::SeaSwir);
                                stream->update();
-                               BOOST_TEST_MESSAGE(stream->getConfiguration().getFlowSwitcher().getFlowId());
-                               BOOST_TEST(stream->getConfiguration().getFlowSwitcher().getFlowId() ==
-                                          sdk::FlowSwitcherFlowId::SeaSwir);
+                               BOOST_TEST(stream->getConfiguration().getFlowSwitcher().getFlowId() == sdk::FlowSwitcherFlowId::SeaSwir);
                            } else if (nFrameId == 40) {
                                BOOST_TEST_MESSAGE(stream->getConfiguration().getFlowSwitcher().getFlowId());
                                stream->getConfiguration().getFlowSwitcher().setFlowId(sdk::FlowSwitcherFlowId::SeaMwir);
                                stream->update();
-                               BOOST_TEST_MESSAGE(stream->getConfiguration().getFlowSwitcher().getFlowId());
-                               BOOST_TEST(stream->getConfiguration().getFlowSwitcher().getFlowId() ==
-                                          sdk::FlowSwitcherFlowId::SeaMwir);
+                               BOOST_TEST(stream->getConfiguration().getFlowSwitcher().getFlowId() == sdk::FlowSwitcherFlowId::SeaMwir);
                            }
                        }
             );
@@ -1782,8 +2069,8 @@ BOOST_AUTO_TEST_CASE(flow_switcher) { // NOLINT
             BOOST_TEST_MESSAGE((std::string) e.what());
         }
 }
-BOOST_AUTO_TEST_SUITE(detector_configuration) // NOLINT
 
+BOOST_AUTO_TEST_SUITE(detector_configuration) // NOLINT
 BOOST_AUTO_TEST_CASE(detector_roi_start) {  // NOLINT
         a_strVideoPath = seaMwirVideo;
         sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
@@ -1806,15 +2093,12 @@ BOOST_AUTO_TEST_CASE(detector_roi_update) {  // NOLINT
         a_strVideoPath = seaMwirVideo;
         updateRoiTestFunc<typeof(sdk::SeaMwirDetectorUpdateStreamConfiguration), int>(sdk::FlowSwitcherFlowId::SeaMwir);
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
         a_strVideoPath = groundMwirVideo;
         updateRoiTestFunc<typeof(sdk::GroundMwirDetectorUpdateStreamConfiguration), float>(sdk::FlowSwitcherFlowId::GroundMwir);
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
         a_strVideoPath = groundSwirVideo;
         updateRoiTestFunc<typeof(sdk::GroundRgbSwirDetectorUpdateStreamConfiguration), double>(sdk::FlowSwitcherFlowId::GroundRgbAndSwir);
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
         a_strVideoPath = seaSwirVideo;
         updateRoiTestFunc<typeof(sdk::SeaSwirDetectorUpdateStreamConfiguration), uint32_t>(sdk::FlowSwitcherFlowId::SeaSwir);
 }
@@ -1824,20 +2108,46 @@ BOOST_AUTO_TEST_CASE(detector_groups) { // NOLINT
         a_strVideoPath = seaMwirVideo;
         sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
         thresholdTestFunc<typeof(startConfiguration.getSeaMwirDetector()), int>(seaGroups, sdk::FlowSwitcherFlowId::SeaMwir);
+        minMaxTestFunc<typeof(startConfiguration.getSeaMwirDetector()), int>(seaGroups, sdk::FlowSwitcherFlowId::SeaMwir);
 
         a_strVideoPath = groundMwirVideo;
         startConfiguration = getStartConfiguration();
         thresholdTestFunc<typeof(startConfiguration.getGroundMwirDetector()), float>(groundGroups, sdk::FlowSwitcherFlowId::GroundMwir);
+        minMaxTestFunc<typeof(startConfiguration.getGroundMwirDetector()), float>(groundGroups, sdk::FlowSwitcherFlowId::GroundMwir);
 
         a_strVideoPath = groundRgbVideo;
         startConfiguration = getStartConfiguration();
         thresholdTestFunc<typeof(startConfiguration.getGroundRgbSwirDetector()), double>(groundGroups, sdk::FlowSwitcherFlowId::GroundRgbAndSwir);
+        minMaxTestFunc<typeof(startConfiguration.getGroundRgbSwirDetector()), double>(groundGroups, sdk::FlowSwitcherFlowId::GroundRgbAndSwir);
 
         a_strVideoPath = seaSwirVideo;
         startConfiguration = getStartConfiguration();
         thresholdTestFunc<typeof(startConfiguration.getSeaSwirDetector()), uint32_t>(seaGroups, sdk::FlowSwitcherFlowId::SeaSwir);
+        minMaxTestFunc<typeof(startConfiguration.getSeaSwirDetector()), uint32_t>(seaGroups, sdk::FlowSwitcherFlowId::SeaSwir);
+
 }
-BOOST_AUTO_TEST_SUITE_END() // NOLINT
+BOOST_AUTO_TEST_SUITE_END() // NOLINT detector_configuration
+
+BOOST_AUTO_TEST_SUITE(tracker)
+BOOST_AUTO_TEST_CASE(tracker_rate){
+    a_strVideoPath = seaMwirVideo;
+    trackerRateTestFunc<typeof(sdk::SeaMwirTrackerRateStartStreamConfiguration), int>(sdk::FlowSwitcherFlowId::SeaMwir);
+
+    a_strVideoPath = groundMwirVideo;
+    trackerRateTestFunc<typeof(sdk::GroundMwirTrackerRateStartStreamConfiguration), float>(sdk::FlowSwitcherFlowId::GroundMwir);
+
+    a_strVideoPath = seaSwirVideo;
+    trackerRateTestFunc<typeof(sdk::SeaSwirTrackerRateStartStreamConfiguration), uint32_t>(sdk::FlowSwitcherFlowId::SeaSwir);
+
+    a_strVideoPath = groundRgbVideo;
+    trackerRateTestFunc<typeof(sdk::GroundRgbSwirTrackerRateStartStreamConfiguration), double>(sdk::FlowSwitcherFlowId::GroundRgbAndSwir);
+}
+BOOST_AUTO_TEST_CASE(tracker_configuration){
+    a_strVideoPath = seaMwirVideo;
+    trackerTestFunc<typeof(sdk::SeaMwirTrackerRateUpdateStreamConfiguration), int>(sdk::FlowSwitcherFlowId::SeaMwir);
+}
+
+BOOST_AUTO_TEST_SUITE_END() // NOLINT tracker
 
 //    BOOST_AUTO_TEST_SUITE(postprocessor) // NOLINT
 //        BOOST_AUTO_TEST_CASE(postprocessor_configuration) {  // NOLINT
@@ -1848,11 +2158,10 @@ BOOST_AUTO_TEST_SUITE_END() // NOLINT
 //        }
 //    BOOST_AUTO_TEST_SUITE_END() // NOLINT
 
-BOOST_AUTO_TEST_SUITE_END() // NOLINT
+//BOOST_AUTO_TEST_SUITE_END() // NOLINT
 
 
 BOOST_AUTO_TEST_SUITE(renderer) // NOLINT
-
 BOOST_AUTO_TEST_CASE(renderer_general) { // NOLINT
         try {
 
@@ -1943,8 +2252,8 @@ BOOST_AUTO_TEST_CASE(renderer_general) { // NOLINT
             BOOST_TEST(((std::string) e.what()).find("not registered") != std::string::npos, "Caught unexpected error: " + (std::string) e.what());
         }
 }
-
-BOOST_AUTO_TEST_SUITE_END() // NOLINT
+BOOST_AUTO_TEST_SUITE_END() // NOLINT renderer
+BOOST_AUTO_TEST_SUITE_END() // NOLINT icd_tests1
 
 BOOST_AUTO_TEST_SUITE(output) //NOLINT
     BOOST_AUTO_TEST_CASE(full_video) { //NOLINT
