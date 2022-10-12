@@ -28,6 +28,8 @@ enum streamError {
     RotateAngleUnsupported,
     RoiIncorrectSize,
     RoiNotInRange,
+    ThresholdIncorrectSize,
+    ThresholNotInRange,
     PreviewError
 };
 
@@ -201,6 +203,9 @@ void streamErrorTest(const std::string &errorCaught, const std::string &streamId
                 BOOST_TEST(errorCaught.find(currentErrorStr) != std::string::npos); //TODO
                 errorCounter = errorCounter > 0 ? errorCounter - 1 : 0;
                 break;
+//            case streamError::ThresholdIncorrectSize:
+//                BOOST_TEST_MESSAGE("Threshold incorrect size test --> ")
+
             case streamError::PreviewError:
                 BOOST_TEST_MESSAGE("Preview error test --> " + streamId);
                 BOOST_TEST(errorCaught.find(currentErrorStr) != std::string::npos);
@@ -213,9 +218,12 @@ void streamErrorTest(const std::string &errorCaught, const std::string &streamId
     currentStreamError = streamError::NONE;
 }
 
-void outOfRangeErrorTest(const std::string &errorMsg, int minVal, int maxVal) {
+void outOfRangeErrorTest(const std::string &errorMsg, int minVal, float maxVal) {
     std::string rangeStr;
-    rangeStr = "is not in range of " + std::to_string(minVal) + " and " + std::to_string(maxVal);
+    if(currentRangeError == rangeError::Threshold)
+        rangeStr = "is not in range of";
+    else
+        rangeStr = "is not in range of " + std::to_string(minVal) + " and " + std::to_string(maxVal);
     BOOST_TEST(errorMsg.find(rangeStr) != std::string::npos);
 //    std::cout << "errMsg = " + errorMsg << std::endl;
 //    std::cout << "rangeStr = " + rangeStr << std::endl;
@@ -961,7 +969,7 @@ void updateRoiTestFunc(sdk::FlowSwitcherFlowId flowId) {
     /*
      * X out of frame */
     try{
-        currentStreamError = streamError::RoiIncorrectSize; // TODO - go to onStreamEvent func
+        currentStreamError = streamError::RoiIncorrectSize;
         errorCounter++;
         currentErrorStr = ROIUnsupported;
         std::this_thread::sleep_for(std::chrono::milliseconds(2000));
@@ -1015,33 +1023,66 @@ void updateRoiTestFunc(sdk::FlowSwitcherFlowId flowId) {
     BOOST_TEST(errorCounter == 0, "Not all expected errors returned! Number of missed errors: " + std::to_string(errorCounter));
 }
 
+
 template<typename CONF, typename T>
 void thresholdTestFunc(const std::array<std::string, 4> &groups, sdk::FlowSwitcherFlowId flowId) {
-    BOOST_TEST_MESSAGE("Valid threshold test");
+    std::cout << printFlow[flowId] << std::endl;
+    errorCounter = 0;
+
     /**
      * Threshold
      */
-//    if (std::type_index(typeid(T)) == std::type_index(typeid(int))) {
-//         groups = seaGroups;
-//    }
-//    else {
-//        groups = groundGroups;
-//    }
+    for (const std::string &group: groups){
+        if(group == "None")
+            break;
+        BOOST_TEST_MESSAGE("Testing group: " + group);
+        BOOST_TEST_MESSAGE("Valid threshold");
+        try{
+            sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
+            CONF conf = getDetectorConfiguration(startConfiguration, (T) 1.0);
+            conf.getGroups(group).setScoreThreshold(0.5);
+            startConfiguration.getFlowSwitcher().setFlowId(flowId);
+            std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConfiguration);
+            waitForStreamStarted(stream);
+            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+            sendFrames(stream, 20, nullptr);
+        }
+        catch (const sdk::Exception& e) {
+            BOOST_TEST(((std::string) e.what()).find("not registered") != std::string::npos, "Caught unexpected error: " + (std::string) e.what());
+        }
 
-    for (const std::string &group: groups) {
+        BOOST_TEST_MESSAGE("Out of range threshold");
         try {
+            BOOST_TEST_MESSAGE("1.1");
+            errorCounter++;
+            currentRangeError = rangeError::Threshold;
+            sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
+            CONF conf = getDetectorConfiguration(startConfiguration, (T) 1.0);
+            conf.getGroups(group).setScoreThreshold(1.1);
+        }
+        catch (const sdk::Exception& e) {
+            outOfRangeErrorTest((std::string) e.what(), 0.1, 1);
+        }
 
-            if (group == "None")
-                break;
-            BOOST_TEST_MESSAGE("Testing group: " + group);
+        try{
+            BOOST_TEST_MESSAGE("0");
+            errorCounter++;
+            sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
+            CONF conf = getDetectorConfiguration(startConfiguration, (T) 1.0);
+            conf.getGroups(group).setScoreThreshold(-1);
+        }
+        catch (const sdk::Exception& e) {
+            outOfRangeErrorTest((std::string) e.what(), 0.1, 1);
+        }
+        
+        BOOST_TEST_MESSAGE("Updating threshold test");
+        try{
             sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
             startConfiguration.getFlowSwitcher().setFlowId(flowId);
             std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConfiguration);
             waitForStreamStarted(stream);
             std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-            CONF conf = getDetectorUpdateConfiguration(stream, (T) 1.0);
-//            conf.getGroups(group).setScoreThreshold(0.89);
-//            stream->update();
+            auto conf = getDetectorUpdateConfiguration(stream, (T) 1.0);
 
             sendFrames(stream, 500,
                        [&stream, &conf, &group](uint32_t nFrameId) {
@@ -1051,6 +1092,7 @@ void thresholdTestFunc(const std::array<std::string, 4> &groups, sdk::FlowSwitch
                                conf.getGroups(group).setScoreThreshold(threshold);
                                stream->update();
                                currentStream = stream;
+                               BOOST_TEST(conf.getGroups(group).getScoreThreshold() == threshold);
                                std::this_thread::sleep_for(std::chrono::milliseconds(2000));
                            } else if (nFrameId == 100) {
                                threshold = (float) ((random() % 91) + 10) / 100;
@@ -1058,6 +1100,7 @@ void thresholdTestFunc(const std::array<std::string, 4> &groups, sdk::FlowSwitch
                                conf.getGroups(group).setScoreThreshold(threshold);
                                stream->update();
                                currentStream = stream;
+                               BOOST_TEST(conf.getGroups(group).getScoreThreshold() == threshold);
                                std::this_thread::sleep_for(std::chrono::milliseconds(2000));
                            } else if (nFrameId == 150) {
                                threshold = (float) ((random() % 91) + 10) / 100;
@@ -1065,6 +1108,7 @@ void thresholdTestFunc(const std::array<std::string, 4> &groups, sdk::FlowSwitch
                                conf.getGroups(group).setScoreThreshold(threshold);
                                stream->update();
                                currentStream = stream;
+                               BOOST_TEST(conf.getGroups(group).getScoreThreshold() == threshold);
                                std::this_thread::sleep_for(std::chrono::milliseconds(2000));
                            } else if (nFrameId == 200) {
                                threshold = (float) ((random() % 91) + 10) / 100;
@@ -1072,13 +1116,15 @@ void thresholdTestFunc(const std::array<std::string, 4> &groups, sdk::FlowSwitch
                                conf.getGroups(group).setScoreThreshold(threshold);
                                stream->update();
                                currentStream = stream;
+                               BOOST_TEST(conf.getGroups(group).getScoreThreshold() == threshold);
                                std::this_thread::sleep_for(std::chrono::milliseconds(2000));
-                           } else if (nFrameId == 250) {
+                           } else if (nFrameId == 250){
                                threshold = (float) ((random() % 91) + 10) / 100;
                                BOOST_TEST_MESSAGE(threshold);
                                conf.getGroups(group).setScoreThreshold(threshold);
                                stream->update();
                                currentStream = stream;
+                               BOOST_TEST(conf.getGroups(group).getScoreThreshold() == threshold);
                                std::this_thread::sleep_for(std::chrono::milliseconds(2000));
                            } else if (nFrameId == 300) {
                                threshold = (float) ((random() % 91) + 10) / 100;
@@ -1086,6 +1132,7 @@ void thresholdTestFunc(const std::array<std::string, 4> &groups, sdk::FlowSwitch
                                conf.getGroups(group).setScoreThreshold(threshold);
                                stream->update();
                                currentStream = stream;
+                               BOOST_TEST(conf.getGroups(group).getScoreThreshold() == threshold);
                                std::this_thread::sleep_for(std::chrono::milliseconds(2000));
                            } else if (nFrameId == 400) {
                                threshold = (float) ((random() % 91) + 10) / 100;
@@ -1093,16 +1140,17 @@ void thresholdTestFunc(const std::array<std::string, 4> &groups, sdk::FlowSwitch
                                conf.getGroups(group).setScoreThreshold(threshold);
                                stream->update();
                                currentStream = stream;
+                               BOOST_TEST(conf.getGroups(group).getScoreThreshold() == threshold);
                                std::this_thread::sleep_for(std::chrono::milliseconds(2000));
                            }
                        }
             );
-            stream.reset();
         }
-        catch (sdk::Exception &e) {
-            BOOST_TEST(((std::string) e.what()).find("not registered") != std::string::npos,
-                       "Caught unexpected error: " + (std::string) e.what());
+        catch (const sdk::Exception& e) {
+            BOOST_TEST(((std::string) e.what()).find("not registered") != std::string::npos, "Caught unexpected error: " + (std::string) e.what());
         }
+        BOOST_TEST(errorCounter == 0, "Not all expected errors returned! Number of missed errors: " + std::to_string(errorCounter));
+        errorCounter = 0;
     }
 }
 
@@ -1688,6 +1736,7 @@ BOOST_AUTO_TEST_CASE(flow_switcher) { // NOLINT
             sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
             std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConfiguration);
             waitForStreamStarted(stream);
+            sendFrames(stream, 1000, nullptr);
             sendFrames(stream, 50,
                        [&stream](uint32_t nFrameId) {
                            if (nFrameId == 10) {
@@ -1772,42 +1821,22 @@ BOOST_AUTO_TEST_CASE(detector_roi_update) {  // NOLINT
 
 BOOST_AUTO_TEST_CASE(detector_groups) { // NOLINT
         BOOST_TEST_MESSAGE("Starting detector groups test");
-        try {
-            a_strVideoPath = seaMwirVideo;
-            thresholdTestFunc<typeof(sdk::SeaMwirDetectorUpdateStreamConfiguration), int>(seaGroups, sdk::FlowSwitcherFlowId::SeaMwir);
-        }
-        catch (sdk::Exception& e) {
-            BOOST_TEST(((std::string) e.what()).find("not registered") != std::string::npos, "Caught unexpected error: " + (std::string) e.what());
-        }
+        a_strVideoPath = seaMwirVideo;
+        sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
+        thresholdTestFunc<typeof(startConfiguration.getSeaMwirDetector()), int>(seaGroups, sdk::FlowSwitcherFlowId::SeaMwir);
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(5000));
-        try {
-            a_strVideoPath = groundMwirVideo;
-            thresholdTestFunc<typeof(sdk::GroundMwirDetectorUpdateStreamConfiguration), float>(groundGroups, sdk::FlowSwitcherFlowId::GroundMwir);
-        }
-        catch (sdk::Exception& e) {
-            BOOST_TEST(((std::string) e.what()).find("not registered") != std::string::npos, "Caught unexpected error: " + (std::string) e.what());
-        }
+        a_strVideoPath = groundMwirVideo;
+        startConfiguration = getStartConfiguration();
+        thresholdTestFunc<typeof(startConfiguration.getGroundMwirDetector()), float>(groundGroups, sdk::FlowSwitcherFlowId::GroundMwir);
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(5000));
-        try {
-            a_strVideoPath = groundRgbVideo;
-            thresholdTestFunc<typeof(sdk::GroundRgbSwirDetectorUpdateStreamConfiguration), double>(groundGroups, sdk::FlowSwitcherFlowId::GroundRgbAndSwir);
-        }
-        catch (sdk::Exception& e) {
-            BOOST_TEST(((std::string) e.what()).find("not registered") != std::string::npos, "Caught unexpected error: " + (std::string) e.what());
-        }
+        a_strVideoPath = groundRgbVideo;
+        startConfiguration = getStartConfiguration();
+        thresholdTestFunc<typeof(startConfiguration.getGroundRgbSwirDetector()), double>(groundGroups, sdk::FlowSwitcherFlowId::GroundRgbAndSwir);
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(5000));
-        try {
-            a_strVideoPath = seaSwirVideo;
-            thresholdTestFunc<typeof(sdk::SeaSwirDetectorUpdateStreamConfiguration), uint32_t>(seaGroups, sdk::FlowSwitcherFlowId::SeaSwir);
-        }
-        catch (sdk::Exception& e) {
-            BOOST_TEST(((std::string) e.what()).find("not registered") != std::string::npos, "Caught unexpected error: " + (std::string) e.what());
-        }
+        a_strVideoPath = seaSwirVideo;
+        startConfiguration = getStartConfiguration();
+        thresholdTestFunc<typeof(startConfiguration.getSeaSwirDetector()), uint32_t>(seaGroups, sdk::FlowSwitcherFlowId::SeaSwir);
 }
-
 BOOST_AUTO_TEST_SUITE_END() // NOLINT
 
 //    BOOST_AUTO_TEST_SUITE(postprocessor) // NOLINT
@@ -1911,8 +1940,7 @@ BOOST_AUTO_TEST_CASE(renderer_general) { // NOLINT
             stream.reset();
         }
         catch (sdk::Exception& e) {
-            BOOST_TEST(((std::string) e.what()).find("not registered") != std::string::npos,
-                       "Caught unexpected error: " + (std::string) e.what());
+            BOOST_TEST(((std::string) e.what()).find("not registered") != std::string::npos, "Caught unexpected error: " + (std::string) e.what());
         }
 }
 
