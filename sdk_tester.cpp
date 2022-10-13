@@ -63,12 +63,19 @@ struct Roi {
 std::array<std::string, 4> seaGroups = {"ship", "sailboat", "jetski", "motorboat"};
 std::array<std::string, 4> groundGroups = {"light-vehicle", "person", "two-wheeled", "None"};
 std::array<std::string, 4> currentDetectedGroups;
-std::map <sdk::FlowSwitcherFlowId, std::string> printFlow = {
+std::map <sdk::FlowSwitcherFlowId, std::string> printDetectorFlow = {
         {sdk::FlowSwitcherFlowId::SeaMwir, "*-*-*-*-*-*-*-* Sea Mwir Detector *-*-*-*-*-*-*-*"},
         {sdk::FlowSwitcherFlowId::SeaSwir, "*-*-*-*-*-*-*-* Sea Swir Detector *-*-*-*-*-*-*-*"},
         {sdk::FlowSwitcherFlowId::GroundRgbAndSwir, "*-*-*-*-*-*-*-* Ground Rgb and Swir Detector *-*-*-*-*-*-*-*"},
         {sdk::FlowSwitcherFlowId::GroundMwir, "*-*-*-*-*-*-*-* Ground Mwir Detector *-*-*-*-*-*-*-*"},
         {sdk::FlowSwitcherFlowId::Unspecified, "*-*-*-*-*-*-*-* Preprocessor *-*-*-*-*-*-*-*"}
+};
+
+std::map <sdk::FlowSwitcherFlowId, std::string> printTrackerFlow = {
+        {sdk::FlowSwitcherFlowId::SeaMwir, "*-*-*-*-*-*-*-* Sea Mwir Tracker *-*-*-*-*-*-*-*"},
+        {sdk::FlowSwitcherFlowId::SeaSwir, "*-*-*-*-*-*-*-* Sea Swir Tracker *-*-*-*-*-*-*-*"},
+        {sdk::FlowSwitcherFlowId::GroundRgbAndSwir, "*-*-*-*-*-*-*-* Ground Rgb and Swir Tracker *-*-*-*-*-*-*-*"},
+        {sdk::FlowSwitcherFlowId::GroundMwir, "*-*-*-*-*-*-*-* Ground Mwir Tracker *-*-*-*-*-*-*-*"},
 };
 
 UserData data;
@@ -220,10 +227,10 @@ void streamErrorTest(const std::string &errorCaught, const std::string &streamId
 
 void outOfRangeErrorTest(const std::string &errorMsg, int minVal, int maxVal) {
     std::string rangeStr;
-    if(currentRangeError == rangeError::Threshold)
-        rangeStr = "is not in range of";
-    else
-        rangeStr = "is not in range of " + std::to_string(minVal) + " and " + std::to_string(maxVal);
+//    if(currentRangeError == rangeError::Threshold || )
+    rangeStr = "is not in range of";
+//    else
+//        rangeStr = "is not in range of " + std::to_string(minVal) + " and " + std::to_string(maxVal);
     BOOST_TEST(errorMsg.find(rangeStr) != std::string::npos);
 //    std::cout << "errMsg = " + errorMsg << std::endl;
 //    std::cout << "rangeStr = " + rangeStr << std::endl;
@@ -563,7 +570,7 @@ sdk::StartStreamConfiguration getStartConfiguration(const std::string &customSet
 template<typename CONF, typename T>
 void roiTestFunc(bool isUpdate, sdk::FlowSwitcherFlowId flowId) {
 
-    std::cout << printFlow[flowId] << std::endl;
+    std::cout << printDetectorFlow[flowId] << std::endl;
     BOOST_TEST_MESSAGE("Testing ROI out of range...");
 //    currentRangeError = rangeError::ROI;
     errorCounter = 0;
@@ -792,7 +799,7 @@ void roiTestFunc(bool isUpdate, sdk::FlowSwitcherFlowId flowId) {
 
 template<typename CONF, typename T>
 void updateRoiTestFunc(sdk::FlowSwitcherFlowId flowId) {
-    std::cout << printFlow[flowId] << std::endl;
+    std::cout << printDetectorFlow[flowId] << std::endl;
     errorCounter = 0;
 
     sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
@@ -1026,7 +1033,7 @@ void updateRoiTestFunc(sdk::FlowSwitcherFlowId flowId) {
 
 template<typename CONF, typename T>
 void thresholdTestFunc(const std::array<std::string, 4> &groups, sdk::FlowSwitcherFlowId flowId) {
-    std::cout << printFlow[flowId] << std::endl;
+    std::cout << printDetectorFlow[flowId] << std::endl;
     errorCounter = 0;
 
     /**
@@ -1156,7 +1163,7 @@ void thresholdTestFunc(const std::array<std::string, 4> &groups, sdk::FlowSwitch
 
 template<typename CONF, typename T>
 void minMaxTestFunc(const std::array<std::string, 4>& groups, sdk::FlowSwitcherFlowId flowId){
-    std::cout << printFlow[flowId] << std::endl;
+    std::cout << printDetectorFlow[flowId] << std::endl;
     errorCounter = 0;
 
     for (const std::string &group: groups){
@@ -1347,7 +1354,7 @@ void minMaxTestFunc(const std::array<std::string, 4>& groups, sdk::FlowSwitcherF
 
 template<typename CONF, typename T>
 void trackerRateTestFunc(sdk::FlowSwitcherFlowId flowId){
-    std::cout << printFlow[flowId] << std::endl;
+    std::cout << printDetectorFlow[flowId] << std::endl;
     errorCounter = 0;
 
     sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
@@ -1449,6 +1456,14 @@ void trackerRateTestFunc(sdk::FlowSwitcherFlowId flowId){
                         outOfRangeErrorTest((std::string)e.what(), conf.minOutputFramerate(), conf.maxOutputFramerate());
                     }
                 case 250:
+                    try{
+                        errorCounter++;
+                        conf.setOutputFramerate(conf.minOutputFramerate() - 1);
+                    }
+                    catch (const sdk::Exception& e) {
+                        outOfRangeErrorTest((std::string)e.what(), conf.minOutputFramerate(), conf.maxOutputFramerate());
+                    }
+                    break;
             }
         });
 
@@ -1460,10 +1475,269 @@ void trackerRateTestFunc(sdk::FlowSwitcherFlowId flowId){
 
 template<typename CONF, typename T>
 void trackerTestFunc(sdk::FlowSwitcherFlowId flowId){
-    std::cout << printFlow[flowId] << std::endl;
+    std::cout << printTrackerFlow[flowId] << std::endl;
     errorCounter = 0;
+    sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
+    CONF conf = getTrackerStartConfiguration(startConfiguration, (T) 1.0);
+
+    float maxFeatureWeight = conf.getParameters().maxFeatureWeight();
+    float maxInitThreshold = conf.getParameters().maxInitThreshold();
+    uint32_t maxInitTrackSize = conf.getParameters().maxInitTrackSize();
+    float maxMaxCosineDistance = conf.getParameters().maxMaxCosineDistance();
+    float maxMaxMahalanbisDistance = conf.getParameters().maxMaxMahalanobisDistance();
+    uint32_t maxMaxPredictedFrames = conf.getParameters().maxMaxPredictedFrames();
+    uint32_t maxTrackFeaturesHistorySize = conf.getParameters().maxTrackFeaturesHistorySize();
+    float maxMinIouThreshold = conf.getParameters().maxMinIouThreshold();
+    uint32_t maxMaxTimeSinceUpdateToReport = conf.maxMaxTimeSinceUpdateToReport();
+
+    float minFeatureWeight = conf.getParameters().minFeatureWeight();
+    float minInitThreshold = conf.getParameters().minInitThreshold();
+    uint32_t minInitTrackSize = conf.getParameters().minInitTrackSize();
+    float minMaxCosineDistance = conf.getParameters().minMaxCosineDistance();
+    float minMaxMahalanbisDistance = conf.getParameters().minMaxMahalanobisDistance();
+    uint32_t minMaxPredictedFrames = conf.getParameters().minMaxPredictedFrames();
+    uint32_t minTrackFeaturesHistorySize = conf.getParameters().minTrackFeaturesHistorySize();
+    float minMinIouThreshold = conf.getParameters().minMinIouThreshold();
+    uint32_t minMaxTimeSinceUpdateToReport = conf.minMaxTimeSinceUpdateToReport();
 
 
+    BOOST_TEST_MESSAGE("Valid test");
+    try{
+        conf.getParameters().setFeatureWeight((float)((random() % 101) / 100));
+        conf.getParameters().setInitThreshold((float)((random() % 101) / 100));
+        conf.getParameters().setInitTrackSize((uint32_t)(random() % (maxInitTrackSize + 1)));
+        conf.getParameters().setMaxCosineDistance(((random() % (uint32_t) (maxMaxCosineDistance + 1)) / 100));
+        conf.getParameters().setMaxMahalanobisDistance((random() % (uint32_t)(maxMaxMahalanbisDistance + 1)));
+        conf.getParameters().setMaxPredictedFrames((uint32_t)(random() % 1001));
+        conf.getParameters().setMinIouThreshold((float)((random() % 101) / 100));
+        conf.getParameters().setTrackFeaturesHistorySize((random() % (maxTrackFeaturesHistorySize)) + 1);
+
+        std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConfiguration);
+        waitForStreamStarted(stream);
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+        sendFrames(stream, 30, nullptr);
+    }
+    catch (const sdk::Exception& e) {
+        std::cerr << (std::string) e.what() << std::endl;
+    }
+
+    BOOST_TEST_MESSAGE("Out of range test");
+    /*
+     * feature weight
+     * */
+    try{
+        BOOST_TEST_MESSAGE("Feature weight = " + std::to_string(minFeatureWeight - 1));
+        errorCounter++;
+        conf.getParameters().setFeatureWeight(minFeatureWeight - 1);
+    }
+    catch (const sdk::Exception& e) {
+        outOfRangeErrorTest((std::string)e.what(), minFeatureWeight, maxFeatureWeight);
+    }
+
+    try{
+        BOOST_TEST_MESSAGE("Feature weight = " + std::to_string(maxFeatureWeight + 1));
+        errorCounter++;
+        conf.getParameters().setFeatureWeight(maxFeatureWeight + 1);
+    }
+    catch (const sdk::Exception& e) {
+        outOfRangeErrorTest((std::string)e.what(), minFeatureWeight, maxFeatureWeight);
+    }
+    /*
+     * Init threshold
+     * */
+    try{
+        BOOST_TEST_MESSAGE("Init threshold = " + std::to_string(minInitThreshold - 1));
+        errorCounter++;
+        conf.getParameters().setInitThreshold(minInitThreshold - 1);
+    }
+    catch (const sdk::Exception& e) {
+        outOfRangeErrorTest((std::string)e.what(), minInitThreshold, maxInitThreshold);
+    }
+
+    try{
+        BOOST_TEST_MESSAGE("Init threshold = " + std::to_string(maxInitThreshold + 1));
+        errorCounter++;
+        conf.getParameters().setInitThreshold(maxInitThreshold + 1);
+    }
+    catch (const sdk::Exception& e) {
+        outOfRangeErrorTest((std::string)e.what(), minInitThreshold, maxInitThreshold);
+    }
+    /*
+     * Init track size
+     * */
+    try{
+        BOOST_TEST_MESSAGE("Init track size = " + std::to_string(minInitTrackSize - 1));
+        errorCounter++;
+        conf.getParameters().setInitTrackSize(minInitTrackSize - 1);
+    }
+    catch (const sdk::Exception& e) {
+        outOfRangeErrorTest((std::string)e.what(), minInitTrackSize, maxInitTrackSize);
+    }
+
+    try{
+        BOOST_TEST_MESSAGE("Init track size = " + std::to_string(maxInitTrackSize + 1));
+        errorCounter++;
+        conf.getParameters().setInitThreshold(maxInitTrackSize + 1);
+    }
+    catch (const sdk::Exception& e) {
+        outOfRangeErrorTest((std::string)e.what(), minInitTrackSize, maxInitTrackSize);
+    }
+    /*
+     * MaxCosineDistance
+     * */
+    try{
+        BOOST_TEST_MESSAGE("MaxCosineDistance = " + std::to_string(minMaxCosineDistance - 1));
+        errorCounter++;
+        conf.getParameters().setMaxCosineDistance(minMaxCosineDistance - 1);
+    }
+    catch (const sdk::Exception& e) {
+        outOfRangeErrorTest((std::string)e.what(), minMaxCosineDistance, maxMaxCosineDistance);
+    }
+
+    try{
+        BOOST_TEST_MESSAGE("MaxCosineDistance = " + std::to_string(maxInitTrackSize + 1));
+        errorCounter++;
+        conf.getParameters().setMaxCosineDistance(maxMaxCosineDistance + 1);
+    }
+    catch (const sdk::Exception& e) {
+        outOfRangeErrorTest((std::string)e.what(), minMaxCosineDistance, maxMaxCosineDistance);
+    }
+    /*
+     * MaxMahalanobisDistance
+     * */
+    try{
+        BOOST_TEST_MESSAGE("MaxMahalanobisDistance = " + std::to_string(minMaxMahalanbisDistance - 1));
+        errorCounter++;
+        conf.getParameters().setMaxMahalanobisDistance(minMaxCosineDistance - 1);
+    }
+    catch (const sdk::Exception& e) {
+        outOfRangeErrorTest((std::string)e.what(), minMaxMahalanbisDistance, maxMaxMahalanbisDistance);
+    }
+
+    try{
+        BOOST_TEST_MESSAGE("MaxMahalanobisDistance = " + std::to_string(maxMaxMahalanbisDistance + 1));
+        errorCounter++;
+        conf.getParameters().setMaxMahalanobisDistance(maxMaxMahalanbisDistance + 1);
+    }
+    catch (const sdk::Exception& e) {
+        outOfRangeErrorTest((std::string)e.what(), minMaxMahalanbisDistance, maxMaxMahalanbisDistance);
+    }
+    /*
+     *  MaxPredictedFrames
+     * */
+    try{
+        BOOST_TEST_MESSAGE("MaxPredictedFrames = " + std::to_string(minMaxPredictedFrames - 1));
+        errorCounter++;
+        conf.getParameters().setMaxPredictedFrames(minMaxPredictedFrames - 1);
+    }
+    catch (const sdk::Exception& e) {
+        outOfRangeErrorTest((std::string)e.what(), minMaxPredictedFrames, maxMaxPredictedFrames);
+    }
+
+    try{
+        BOOST_TEST_MESSAGE("MaxPredictedFrames = " + std::to_string(maxMaxPredictedFrames + 1));
+        errorCounter++;
+        conf.getParameters().setMaxPredictedFrames(maxMaxPredictedFrames + 1);
+    }
+    catch (const sdk::Exception& e) {
+        outOfRangeErrorTest((std::string)e.what(), minMaxPredictedFrames, maxMaxPredictedFrames);
+    }
+    /*
+     * TrackFeaturesHistorySize
+     * */
+    try{
+        BOOST_TEST_MESSAGE("TrackFeaturesHistorySize = " + std::to_string(minTrackFeaturesHistorySize - 1));
+        errorCounter++;
+        conf.getParameters().setTrackFeaturesHistorySize(minTrackFeaturesHistorySize - 1);
+    }
+    catch (const sdk::Exception& e) {
+        outOfRangeErrorTest((std::string)e.what(), minTrackFeaturesHistorySize, maxTrackFeaturesHistorySize);
+    }
+
+    try{
+        BOOST_TEST_MESSAGE("TrackFeaturesHistorySize = " + std::to_string(maxTrackFeaturesHistorySize + 1));
+        errorCounter++;
+        conf.getParameters().setMaxPredictedFrames(maxTrackFeaturesHistorySize + 1);
+    }
+    catch (const sdk::Exception& e) {
+        outOfRangeErrorTest((std::string)e.what(), minTrackFeaturesHistorySize, maxTrackFeaturesHistorySize);
+    }
+    /*
+     * MinIouThreshold
+     * */
+    try{
+        BOOST_TEST_MESSAGE("MinIouThreshold = " + std::to_string(minMinIouThreshold - 1));
+        errorCounter++;
+        conf.getParameters().setMinIouThreshold(minMinIouThreshold - 1);
+    }
+    catch (const sdk::Exception& e) {
+        outOfRangeErrorTest((std::string)e.what(), minMinIouThreshold, maxMinIouThreshold);
+    }
+
+    try{
+        BOOST_TEST_MESSAGE("MinIouThreshold = " + std::to_string(maxMinIouThreshold + 1));
+        errorCounter++;
+        conf.getParameters().setMinIouThreshold(maxMinIouThreshold + 1);
+    }
+    catch (const sdk::Exception& e) {
+        outOfRangeErrorTest((std::string)e.what(), minMinIouThreshold, maxMinIouThreshold);
+    }
+    /*
+     * MaxTimeSinceUpdateToReport
+     * */
+    try{
+        BOOST_TEST_MESSAGE("MaxTimeSinceUpdateToReport = " + std::to_string(minMaxTimeSinceUpdateToReport - 1));
+        errorCounter++;
+        conf.setMaxTimeSinceUpdateToReport(minMaxTimeSinceUpdateToReport - 1);
+    }
+    catch (const sdk::Exception& e) {
+        outOfRangeErrorTest((std::string)e.what(), minMaxTimeSinceUpdateToReport, maxMaxTimeSinceUpdateToReport);
+    }
+
+    try{
+        BOOST_TEST_MESSAGE("MaxTimeSinceUpdateToReport = " + std::to_string(maxMaxTimeSinceUpdateToReport + 1));
+        errorCounter++;
+        conf.setMaxTimeSinceUpdateToReport(maxMaxTimeSinceUpdateToReport + 1);
+    }
+    catch (const sdk::Exception& e) {
+        outOfRangeErrorTest((std::string)e.what(), minMaxTimeSinceUpdateToReport, maxMaxTimeSinceUpdateToReport);
+    }
+    BOOST_TEST(errorCounter == 0, "Not all expected errors returned! Number of missed errors: " + std::to_string(errorCounter));
+
+    BOOST_TEST_MESSAGE("Update test");
+    /*
+     * Valid update
+     * */
+    try{
+        startConfiguration = getStartConfiguration();
+        startConfiguration.getFlowSwitcher().setFlowId(flowId);
+        std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConfiguration);
+        waitForStreamStarted(stream);
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+        auto conf = getTrackerUpdateConfiguration(stream, (T) 1.0);
+        conf.setEnable(false);
+        conf.setMaxTimeSinceUpdateToReport(random() % 1001);
+        stream->update();
+        sendFrames(stream, 50, nullptr);
+    }
+    catch (const sdk::Exception& e) {
+        std::cerr << (std::string) e.what() << std::endl;
+    }
+    /*
+     * Updating to o.o.r value
+     * */
+    try{
+        startConfiguration = getStartConfiguration();
+        startConfiguration.getFlowSwitcher().setFlowId(flowId);
+        std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConfiguration);
+        waitForStreamStarted(stream);
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+        auto conf = getTrackerUpdateConfiguration(stream, (T) 1.0);
+        conf.setMaxTimeSinceUpdateToReport(maxMaxTimeSinceUpdateToReport + 1);
+    }
+    catch (const sdk::Exception& e) {
+        outOfRangeErrorTest((std::string) e.what(), minMaxTimeSinceUpdateToReport, maxMaxTimeSinceUpdateToReport);
+    }
 }
 
 template<typename CONF, typename T>
@@ -2143,8 +2417,18 @@ BOOST_AUTO_TEST_CASE(tracker_rate){
     trackerRateTestFunc<typeof(sdk::GroundRgbSwirTrackerRateStartStreamConfiguration), double>(sdk::FlowSwitcherFlowId::GroundRgbAndSwir);
 }
 BOOST_AUTO_TEST_CASE(tracker_configuration){
-    a_strVideoPath = seaMwirVideo;
-    trackerTestFunc<typeof(sdk::SeaMwirTrackerRateUpdateStreamConfiguration), int>(sdk::FlowSwitcherFlowId::SeaMwir);
+    BOOST_TEST_MESSAGE("Starting tracker test...");
+        a_strVideoPath = seaMwirVideo;
+        trackerTestFunc<typeof(sdk::SeaMwirTrackerStartStreamConfiguration), int>(sdk::FlowSwitcherFlowId::SeaMwir);
+
+        a_strVideoPath = groundMwirVideo;
+        trackerTestFunc<typeof(sdk::GroundMwirTrackerStartStreamConfiguration), float>(sdk::FlowSwitcherFlowId::GroundMwir);
+
+        a_strVideoPath = seaSwirVideo;
+        trackerTestFunc<typeof(sdk::SeaSwirTrackerStartStreamConfiguration), uint32_t>(sdk::FlowSwitcherFlowId::SeaSwir);
+
+        a_strVideoPath = groundRgbVideo;
+        trackerTestFunc<typeof(sdk::GroundRgbSwirTrackerStartStreamConfiguration), double>(sdk::FlowSwitcherFlowId::GroundRgbAndSwir);
 }
 
 BOOST_AUTO_TEST_SUITE_END() // NOLINT tracker

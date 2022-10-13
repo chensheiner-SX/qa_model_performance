@@ -111,6 +111,18 @@ sdk::GroundRgbSwirTrackerStartStreamConfiguration getTrackerStartConfiguration(s
 /*
  * get flow update tracker
  * */
+sdk::SeaMwirTrackerUpdateStreamConfiguration getTrackerUpdateConfiguration(std::shared_ptr<sdk::Stream>& stream, int x){
+    return stream->getConfiguration().getSeaMwirTracker();
+}
+sdk::SeaSwirTrackerUpdateStreamConfiguration getTrackerUpdateConfiguration(std::shared_ptr<sdk::Stream>& stream, uint32_t x){
+    return stream->getConfiguration().getSeaSwirTracker();
+}
+sdk::GroundMwirTrackerUpdateStreamConfiguration getTrackerUpdateConfiguration(std::shared_ptr<sdk::Stream>& stream, float x){
+    return stream->getConfiguration().getGroundMwirTracker();
+}
+sdk::GroundRgbSwirTrackerUpdateStreamConfiguration getTrackerUpdateConfiguration(std::shared_ptr<sdk::Stream>& stream, double x){
+    return stream->getConfiguration().getGroundRgbSwirTracker();
+}
 
 
 /**
