@@ -562,7 +562,7 @@ void waitForStreamStarted(const std::shared_ptr<sdk::Stream> &stream) {
 sdk::StartStreamConfiguration getStartConfiguration(const std::string &customSettings = "stream_settings.bin") {
     sdk::StartStreamConfiguration startConfiguration = mainPipeline->createStartStreamConfiguration(customSettings);
     startConfiguration.getRawSource();
-    startConfiguration.getRawSource().setReadTimeoutInSec(20); // TODO(NOTE) - it was 20;
+    startConfiguration.getRawSource().setReadTimeoutInSec(-1); // TODO(NOTE) - it was 20;
     startConfiguration.getGstSink().setUrl(sinkStr);
     return startConfiguration;
 }
@@ -1702,7 +1702,6 @@ void trackerTestFunc(sdk::FlowSwitcherFlowId flowId){
     catch (const sdk::Exception& e) {
         outOfRangeErrorTest((std::string)e.what(), minMaxTimeSinceUpdateToReport, maxMaxTimeSinceUpdateToReport);
     }
-    BOOST_TEST(errorCounter == 0, "Not all expected errors returned! Number of missed errors: " + std::to_string(errorCounter));
 
     BOOST_TEST_MESSAGE("Update test");
     /*
@@ -1727,6 +1726,7 @@ void trackerTestFunc(sdk::FlowSwitcherFlowId flowId){
      * Updating to o.o.r value
      * */
     try{
+        errorCounter++;
         startConfiguration = getStartConfiguration();
         startConfiguration.getFlowSwitcher().setFlowId(flowId);
         std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConfiguration);
@@ -1737,6 +1737,294 @@ void trackerTestFunc(sdk::FlowSwitcherFlowId flowId){
     }
     catch (const sdk::Exception& e) {
         outOfRangeErrorTest((std::string) e.what(), minMaxTimeSinceUpdateToReport, maxMaxTimeSinceUpdateToReport);
+    }
+
+    BOOST_TEST(errorCounter == 0, "Not all expected errors returned! Number of missed errors: " + std::to_string(errorCounter));
+}
+
+void rendererTestFunc(/*const sdk::FlowSwitcherFlowId flowId*/){
+    sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
+    errorCounter = 0;
+    BOOST_TEST_MESSAGE("Starting Out of range tests...");
+    try {
+        BOOST_TEST_MESSAGE("Target Width = " + std::to_string(startConfiguration.getRenderer().getTargetWidth() + 1));
+        errorCounter++;
+        startConfiguration.getRenderer().setTargetWidth(startConfiguration.getRenderer().getTargetWidth() + 1);
+    }
+    catch (const sdk::Exception& e) {
+        outOfRangeErrorTest((std::string) e.what(),startConfiguration.getRenderer().minTargetWidth(), startConfiguration.getRenderer().maxTargetWidth());
+    }
+    try {
+        BOOST_TEST_MESSAGE("Target Height = " + std::to_string(startConfiguration.getRenderer().getTargetHeight() + 1));
+        errorCounter++;
+        startConfiguration.getRenderer().setTargetHeight(startConfiguration.getRenderer().getTargetHeight() + 1);
+    }
+    catch (const sdk::Exception& e) {
+        outOfRangeErrorTest((std::string) e.what(),startConfiguration.getRenderer().minTargetHeight(), startConfiguration.getRenderer().maxTargetHeight());
+    }
+    try {
+        BOOST_TEST_MESSAGE("Normalization.Alpha = " + std::to_string(startConfiguration.getRenderer().getNormalization().maxAlpha() + 1));
+        errorCounter++;
+        startConfiguration.getRenderer().getNormalization().setAlpha(startConfiguration.getRenderer().getNormalization().maxAlpha() + 1);
+    }
+    catch (const sdk::Exception& e) {
+        outOfRangeErrorTest((std::string) e.what(),startConfiguration.getRenderer().getNormalization().minAlpha(), startConfiguration.getRenderer().getNormalization().maxAlpha());
+    }
+    try {
+        BOOST_TEST_MESSAGE("Normalization.Beta = " + std::to_string(startConfiguration.getRenderer().getNormalization().maxBeta() + 1));
+        errorCounter++;
+        startConfiguration.getRenderer().getNormalization().setBeta(startConfiguration.getRenderer().getNormalization().maxBeta() + 1);
+    }
+    catch (const sdk::Exception& e) {
+        outOfRangeErrorTest((std::string) e.what(),startConfiguration.getRenderer().getNormalization().minBeta(), startConfiguration.getRenderer().getNormalization().maxBeta());
+    }
+    try {
+        BOOST_TEST_MESSAGE("Normalization.StdCropSize = " + std::to_string(startConfiguration.getRenderer().getNormalization().maxStdCropSize() + 1));
+        errorCounter++;
+        startConfiguration.getRenderer().getNormalization().setStdCropSize(startConfiguration.getRenderer().getNormalization().maxStdCropSize() + 1);
+    }
+    catch (const sdk::Exception& e) {
+        outOfRangeErrorTest((std::string) e.what(),startConfiguration.getRenderer().getNormalization().minStdCropSize(), startConfiguration.getRenderer().getNormalization().maxStdCropSize());
+    }
+    try {
+        BOOST_TEST_MESSAGE("TrackVelocityFactor = " + std::to_string(startConfiguration.getRenderer().maxTrackVelocityFactor() + 1));
+        errorCounter++;
+        startConfiguration.getRenderer().setTrackVelocityFactor(startConfiguration.getRenderer().maxTrackVelocityFactor() + 1);
+    }
+    catch (const sdk::Exception& e) {
+        outOfRangeErrorTest((std::string) e.what(),startConfiguration.getRenderer().minTrackVelocityFactor(), startConfiguration.getRenderer().maxTrackVelocityFactor());
+    }
+    try {
+        BOOST_TEST_MESSAGE("PointTrackRadius = " + std::to_string(startConfiguration.getRenderer().maxPointTrackRadius() + 1));
+        errorCounter++;
+        startConfiguration.getRenderer().setPointTrackRadius(startConfiguration.getRenderer().maxPointTrackRadius() + 1);
+    }
+    catch (const sdk::Exception& e) {
+        outOfRangeErrorTest((std::string) e.what(),startConfiguration.getRenderer().minPointTrackRadius(), startConfiguration.getRenderer().maxPointTrackRadius());
+    }
+    try {
+        BOOST_TEST_MESSAGE("CenterOfMassRadius = " + std::to_string(startConfiguration.getRenderer().maxCenterOfMassRadius() + 1));
+        errorCounter++;
+        startConfiguration.getRenderer().setCenterOfMassRadius(startConfiguration.getRenderer().maxCenterOfMassRadius() + 1);
+    }
+    catch (const sdk::Exception& e) {
+        outOfRangeErrorTest((std::string) e.what(),startConfiguration.getRenderer().minCenterOfMassRadius(), startConfiguration.getRenderer().maxCenterOfMassRadius());
+    }
+    try {
+        BOOST_TEST_MESSAGE("DetectorRoi.Color = " + std::to_string(startConfiguration.getRenderer().getDetectorRoi().maxColor() + 1));
+        errorCounter++;
+        startConfiguration.getRenderer().getDetectorRoi().setColor(startConfiguration.getRenderer().getDetectorRoi().maxColor() + 1);
+    }
+    catch (const sdk::Exception& e) {
+        outOfRangeErrorTest((std::string) e.what(),startConfiguration.getRenderer().getDetectorRoi().minColor(), startConfiguration.getRenderer().getDetectorRoi().maxColor());
+    }
+    try {
+        BOOST_TEST_MESSAGE("DetectorRoi.LineThickness = " + std::to_string(startConfiguration.getRenderer().getDetectorRoi().maxLineThickness() + 1));
+        errorCounter++;
+        startConfiguration.getRenderer().getDetectorRoi().setLineThickness(startConfiguration.getRenderer().getDetectorRoi().maxLineThickness() + 1);
+    }
+    catch (const sdk::Exception& e) {
+        outOfRangeErrorTest((std::string) e.what(),startConfiguration.getRenderer().getDetectorRoi().minLineThickness(), startConfiguration.getRenderer().getDetectorRoi().maxLineThickness());
+    }
+    try {
+        BOOST_TEST_MESSAGE("DetectorRoi.LineThickness = " + std::to_string(startConfiguration.getRenderer().getDetectorRoi().maxLineThickness() + 1));
+        errorCounter++;
+        startConfiguration.getRenderer().getDetectorRoi().setLineThickness(startConfiguration.getRenderer().getDetectorRoi().maxLineThickness() + 1);
+    }
+    catch (const sdk::Exception& e) {
+        outOfRangeErrorTest((std::string) e.what(),startConfiguration.getRenderer().getDetectorRoi().minLineThickness(), startConfiguration.getRenderer().getDetectorRoi().maxLineThickness());
+    }
+    try {
+        BOOST_TEST_MESSAGE("BoundingBoxes[].BoxColor = " + std::to_string(startConfiguration.getRenderer().getBoundingBoxes("").maxBoxColor() + 1));
+        errorCounter++;
+        startConfiguration.getRenderer().getBoundingBoxes("").setBoxColor(startConfiguration.getRenderer().getBoundingBoxes("").maxBoxColor() + 1);
+    }
+    catch (const sdk::Exception& e) {
+        outOfRangeErrorTest((std::string) e.what(),startConfiguration.getRenderer().getBoundingBoxes("").minBoxColor(), startConfiguration.getRenderer().getBoundingBoxes("").maxBoxColor());
+    }
+    try {
+        BOOST_TEST_MESSAGE("BoundingBoxes[].LineThickness = " + std::to_string(startConfiguration.getRenderer().getBoundingBoxes("").maxLineThickness() + 1));
+        errorCounter++;
+        startConfiguration.getRenderer().getBoundingBoxes("").setLineThickness(startConfiguration.getRenderer().getBoundingBoxes("").maxLineThickness() + 1);
+    }
+    catch (const sdk::Exception& e) {
+        outOfRangeErrorTest((std::string) e.what(),startConfiguration.getRenderer().getBoundingBoxes("").minLineThickness(), startConfiguration.getRenderer().getBoundingBoxes("").maxLineThickness());
+    }
+    try {
+        BOOST_TEST_MESSAGE("BoundingBoxes[].TextOffsetX = " + std::to_string(startConfiguration.getRenderer().getBoundingBoxes("").maxTextOffsetX() + 1));
+        errorCounter++;
+        startConfiguration.getRenderer().getBoundingBoxes("").setTextOffsetX(startConfiguration.getRenderer().getBoundingBoxes("").maxTextOffsetX() + 1);
+    }
+    catch (const sdk::Exception& e) {
+        outOfRangeErrorTest((std::string) e.what(),startConfiguration.getRenderer().getBoundingBoxes("").minTextOffsetX(), startConfiguration.getRenderer().getBoundingBoxes("").maxTextOffsetX());
+    }
+    try {
+        BOOST_TEST_MESSAGE("BoundingBoxes[].TextOffsetY = " + std::to_string(startConfiguration.getRenderer().getBoundingBoxes("").maxTextOffsetY() + 1));
+        errorCounter++;
+        startConfiguration.getRenderer().getBoundingBoxes("").setTextOffsetY(startConfiguration.getRenderer().getBoundingBoxes("").maxTextOffsetY() + 1);
+    }
+    catch (const sdk::Exception& e) {
+        outOfRangeErrorTest((std::string) e.what(),startConfiguration.getRenderer().getBoundingBoxes("").minTextOffsetY(), startConfiguration.getRenderer().getBoundingBoxes("").maxTextOffsetY());
+    }
+    try {
+        BOOST_TEST_MESSAGE("BoundingBoxes[].FontColor = " + std::to_string(startConfiguration.getRenderer().getBoundingBoxes("").maxFontColor() + 1));
+        errorCounter++;
+        startConfiguration.getRenderer().getBoundingBoxes("").setFontColor(startConfiguration.getRenderer().getBoundingBoxes("").maxFontColor() + 1);
+    }
+    catch (const sdk::Exception& e) {
+        outOfRangeErrorTest((std::string) e.what(),startConfiguration.getRenderer().getBoundingBoxes("").minFontColor(), startConfiguration.getRenderer().getBoundingBoxes("").maxFontColor());
+    }
+    try {
+        BOOST_TEST_MESSAGE("BoundingBoxes[].FontScale = " + std::to_string(startConfiguration.getRenderer().getBoundingBoxes("").maxFontScale() + 1));
+        errorCounter++;
+        startConfiguration.getRenderer().getBoundingBoxes("").setFontScale(startConfiguration.getRenderer().getBoundingBoxes("").maxFontScale() + 1);
+    }
+    catch (const sdk::Exception& e) {
+        outOfRangeErrorTest((std::string) e.what(),startConfiguration.getRenderer().getBoundingBoxes("").minFontScale(), startConfiguration.getRenderer().getBoundingBoxes("").maxFontScale());
+    }
+    try {
+        BOOST_TEST_MESSAGE("BoundingBoxes[].FontThickness = " + std::to_string(startConfiguration.getRenderer().getBoundingBoxes("").maxFontThickness() + 1));
+        errorCounter++;
+        startConfiguration.getRenderer().getBoundingBoxes("").setFontScale(startConfiguration.getRenderer().getBoundingBoxes("").maxFontThickness() + 1);
+    }
+    catch (const sdk::Exception& e) {
+        outOfRangeErrorTest((std::string) e.what(),startConfiguration.getRenderer().getBoundingBoxes("").minFontThickness(), startConfiguration.getRenderer().getBoundingBoxes("").maxFontThickness());
+    }
+    try {
+        BOOST_TEST_MESSAGE("Osd.MarginX = " + std::to_string(startConfiguration.getRenderer().getOsd().maxMarginX() + 1));
+        errorCounter++;
+        startConfiguration.getRenderer().getOsd().setMarginX(startConfiguration.getRenderer().getOsd().maxMarginX() + 1);
+    }
+    catch (const sdk::Exception& e) {
+        outOfRangeErrorTest((std::string) e.what(),startConfiguration.getRenderer().getOsd().minMarginX(), startConfiguration.getRenderer().getOsd().maxMarginX());
+    }
+    try {
+        BOOST_TEST_MESSAGE("Osd.MarginY = " + std::to_string(startConfiguration.getRenderer().getOsd().maxMarginY() + 1));
+        errorCounter++;
+        startConfiguration.getRenderer().getOsd().setMarginY(startConfiguration.getRenderer().getOsd().maxMarginY() + 1);
+    }
+    catch (const sdk::Exception& e) {
+        outOfRangeErrorTest((std::string) e.what(),startConfiguration.getRenderer().getOsd().minMarginY(), startConfiguration.getRenderer().getOsd().maxMarginY());
+    }
+    try {
+        BOOST_TEST_MESSAGE("Osd.LineDistance = " + std::to_string(startConfiguration.getRenderer().getOsd().maxLineDistance() + 1));
+        errorCounter++;
+        startConfiguration.getRenderer().getOsd().setMarginY(startConfiguration.getRenderer().getOsd().maxLineDistance() + 1);
+    }
+    catch (const sdk::Exception& e) {
+        outOfRangeErrorTest((std::string) e.what(),startConfiguration.getRenderer().getOsd().minLineDistance(), startConfiguration.getRenderer().getOsd().maxLineDistance());
+    }
+    try {
+        BOOST_TEST_MESSAGE("Osd.BackColor = " + std::to_string(startConfiguration.getRenderer().getOsd().maxBackColor() + 1));
+        errorCounter++;
+        startConfiguration.getRenderer().getOsd().setBackColor(startConfiguration.getRenderer().getOsd().maxBackColor() + 1);
+    }
+    catch (const sdk::Exception& e) {
+        outOfRangeErrorTest((std::string) e.what(),startConfiguration.getRenderer().getOsd().minBackColor(), startConfiguration.getRenderer().getOsd().maxBackColor());
+    }
+    try {
+        BOOST_TEST_MESSAGE("Osd.BackTransparency = " + std::to_string(startConfiguration.getRenderer().getOsd().maxBackTransparency() + 1));
+        errorCounter++;
+        startConfiguration.getRenderer().getOsd().setBackColor(startConfiguration.getRenderer().getOsd().maxBackTransparency() + 1);
+    }
+    catch (const sdk::Exception& e) {
+        outOfRangeErrorTest((std::string) e.what(),startConfiguration.getRenderer().getOsd().minBackTransparency(), startConfiguration.getRenderer().getOsd().maxBackTransparency());
+    }
+    try {
+        BOOST_TEST_MESSAGE("Osd.FontColor = " + std::to_string(startConfiguration.getRenderer().getOsd().maxFontColor() + 1));
+        errorCounter++;
+        startConfiguration.getRenderer().getOsd().setFontColor(startConfiguration.getRenderer().getOsd().maxFontColor() + 1);
+    }
+    catch (const sdk::Exception& e) {
+        outOfRangeErrorTest((std::string) e.what(),startConfiguration.getRenderer().getOsd().minFontColor(), startConfiguration.getRenderer().getOsd().maxFontColor());
+    }
+    try {
+        BOOST_TEST_MESSAGE("Osd.FontScale = " + std::to_string(startConfiguration.getRenderer().getOsd().maxFontScale() + 1));
+        errorCounter++;
+        startConfiguration.getRenderer().getOsd().setFontScale(startConfiguration.getRenderer().getOsd().maxFontScale() + 1);
+    }
+    catch (const sdk::Exception& e) {
+        outOfRangeErrorTest((std::string) e.what(),startConfiguration.getRenderer().getOsd().minFontScale(), startConfiguration.getRenderer().getOsd().maxFontScale());
+    }
+    try {
+        BOOST_TEST_MESSAGE("Osd.FontThickness = " + std::to_string(startConfiguration.getRenderer().getOsd().maxFontThickness() + 1));
+        errorCounter++;
+        startConfiguration.getRenderer().getOsd().setFontScale(startConfiguration.getRenderer().getOsd().maxFontThickness() + 1);
+    }
+    catch (const sdk::Exception& e) {
+        outOfRangeErrorTest((std::string) e.what(),startConfiguration.getRenderer().getOsd().minFontThickness(), startConfiguration.getRenderer().getOsd().maxFontThickness());
+    }
+    try {
+        BOOST_TEST_MESSAGE("Histogram.MarginX = " + std::to_string(startConfiguration.getRenderer().getHistogram().maxMarginX() + 1));
+        errorCounter++;
+        startConfiguration.getRenderer().getHistogram().setMarginX(startConfiguration.getRenderer().getHistogram().maxMarginX() + 1);
+    }
+    catch (const sdk::Exception& e) {
+        outOfRangeErrorTest((std::string) e.what(),startConfiguration.getRenderer().getHistogram().minMarginX(), startConfiguration.getRenderer().getHistogram().maxMarginX());
+    }
+    try {
+        BOOST_TEST_MESSAGE("Histogram.MarginY = " + std::to_string(startConfiguration.getRenderer().getHistogram().maxMarginY() + 1));
+        errorCounter++;
+        startConfiguration.getRenderer().getHistogram().setMarginY(startConfiguration.getRenderer().getHistogram().maxMarginY() + 1);
+    }
+    catch (const sdk::Exception& e) {
+        outOfRangeErrorTest((std::string) e.what(),startConfiguration.getRenderer().getHistogram().minMarginY(), startConfiguration.getRenderer().getHistogram().maxMarginY());
+    }
+    try {
+        BOOST_TEST_MESSAGE("Histogram.Bins = " + std::to_string(startConfiguration.getRenderer().getHistogram().maxBins() + 1));
+        errorCounter++;
+        startConfiguration.getRenderer().getHistogram().setMarginY(startConfiguration.getRenderer().getHistogram().maxBins() + 1);
+    }
+    catch (const sdk::Exception& e) {
+        outOfRangeErrorTest((std::string) e.what(),startConfiguration.getRenderer().getHistogram().minBins(), startConfiguration.getRenderer().getHistogram().maxBins());
+    }
+    try {
+        BOOST_TEST_MESSAGE("Histogram.Width = " + std::to_string(startConfiguration.getRenderer().getHistogram().maxWidth() + 1));
+        errorCounter++;
+        startConfiguration.getRenderer().getHistogram().setWidth(startConfiguration.getRenderer().getHistogram().maxWidth() + 1);
+    }
+    catch (const sdk::Exception& e) {
+        outOfRangeErrorTest((std::string) e.what(),startConfiguration.getRenderer().getHistogram().minWidth(), startConfiguration.getRenderer().getHistogram().maxWidth());
+    }
+    try {
+        BOOST_TEST_MESSAGE("Histogram.Height = " + std::to_string(startConfiguration.getRenderer().getHistogram().maxHeight() + 1));
+        errorCounter++;
+        startConfiguration.getRenderer().getHistogram().setHeight(startConfiguration.getRenderer().getHistogram().maxHeight() + 1);
+    }
+    catch (const sdk::Exception& e) {
+        outOfRangeErrorTest((std::string) e.what(),startConfiguration.getRenderer().getHistogram().minHeight(), startConfiguration.getRenderer().getHistogram().maxHeight());
+    }
+    try {
+        BOOST_TEST_MESSAGE("Histogram.BackColor = " + std::to_string(startConfiguration.getRenderer().getHistogram().maxBackColor() + 1));
+        errorCounter++;
+        startConfiguration.getRenderer().getHistogram().setBackColor(startConfiguration.getRenderer().getHistogram().maxBackColor() + 1);
+    }
+    catch (const sdk::Exception& e) {
+        outOfRangeErrorTest((std::string) e.what(),startConfiguration.getRenderer().getHistogram().minBackColor(), startConfiguration.getRenderer().getHistogram().maxBackColor());
+    }
+    try {
+        BOOST_TEST_MESSAGE("Histogram.BackTransparency = " + std::to_string(startConfiguration.getRenderer().getHistogram().maxBackTransparency() + 1));
+        errorCounter++;
+        startConfiguration.getRenderer().getHistogram().setBackTransparency(startConfiguration.getRenderer().getHistogram().maxBackTransparency() + 1);
+    }
+    catch (const sdk::Exception& e) {
+        outOfRangeErrorTest((std::string) e.what(),startConfiguration.getRenderer().getHistogram().minBackTransparency(), startConfiguration.getRenderer().getHistogram().maxBackTransparency());
+    }
+    try {
+        BOOST_TEST_MESSAGE("Histogram.ColorBefore = " + std::to_string(startConfiguration.getRenderer().getHistogram().maxColorBefore() + 1));
+        errorCounter++;
+        startConfiguration.getRenderer().getHistogram().setColorBefore(startConfiguration.getRenderer().getHistogram().maxColorBefore() + 1);
+    }
+    catch (const sdk::Exception& e) {
+        outOfRangeErrorTest((std::string) e.what(),startConfiguration.getRenderer().getHistogram().minColorBefore(), startConfiguration.getRenderer().getHistogram().maxColorBefore());
+    }
+    try {
+        BOOST_TEST_MESSAGE("Histogram.ColorAfter = " + std::to_string(startConfiguration.getRenderer().getHistogram().maxColorAfter() + 1));
+        errorCounter++;
+        startConfiguration.getRenderer().getHistogram().setColorAfter(startConfiguration.getRenderer().getHistogram().maxColorAfter() + 1);
+    }
+    catch (const sdk::Exception& e) {
+        outOfRangeErrorTest((std::string) e.what(),startConfiguration.getRenderer().getHistogram().minColorAfter(), startConfiguration.getRenderer().getHistogram().maxColorAfter());
     }
 }
 
@@ -2443,13 +2731,11 @@ BOOST_AUTO_TEST_SUITE_END() // NOLINT tracker
 //    BOOST_AUTO_TEST_SUITE_END() // NOLINT
 
 //BOOST_AUTO_TEST_SUITE_END() // NOLINT
-
+//TODO - rangeEstimation and TracksPublisher not implemented
 
 BOOST_AUTO_TEST_SUITE(renderer) // NOLINT
 BOOST_AUTO_TEST_CASE(renderer_general) { // NOLINT
         try {
-
-            //        std::this_thread::sleep_for(std::chrono::milliseconds(2000));
             a_strVideoPath = groundMwirVideo;
             sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
             startConfiguration.getFlowSwitcher().setFlowId(sdk::FlowSwitcherFlowId::GroundMwir);
@@ -2477,6 +2763,7 @@ BOOST_AUTO_TEST_CASE(renderer_general) { // NOLINT
             std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConfiguration);
 
             waitForStreamStarted(stream);
+            rendererTestFunc();
             sendFrames(stream, 500, nullptr);
             sendFrames(stream, 200,
                        [&stream](uint32_t nFrameId) {
@@ -2608,7 +2895,7 @@ BOOST_AUTO_TEST_SUITE(output) //NOLINT
             BOOST_TEST(errorCounter == 0, "Not all expected errors returned! Number of missed errors: " + std::to_string(errorCounter));
         }
         catch (const std::exception &e) {
-            std::cout << e.what() << std::endl;
+            std::cerr << e.what() << std::endl;
         }
     }
 
@@ -2630,12 +2917,20 @@ BOOST_AUTO_TEST_SUITE(debug) // NOLINT
         sendFrames(stream, 1000, nullptr);
     }
 
-BOOST_AUTO_TEST_SUITE_END() // NOLINT
+BOOST_AUTO_TEST_SUITE_END() // NOLINT debug
+
+BOOST_AUTO_TEST_CASE(test){
+    sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
+    startConfiguration.getSeaMwirTrackerRate().setOutputFramerate(50);
+    std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConfiguration);
+    waitForStreamStarted(stream);
+
+
+    sendFrames(stream, 2500, nullptr);
+}
 
 BOOST_AUTO_TEST_CASE(destroy) { // NOLINT
         mainPipeline.reset();
 }
 
-BOOST_AUTO_TEST_CASE(test){
 
-}
