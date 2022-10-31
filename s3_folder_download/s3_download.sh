@@ -9,4 +9,4 @@ if [[ $# != 2 ]]; then
 	exit 0
 fi
 
-aws s3 cp s3://$1 $2 --recursive
+aws s3 cp $1 $2 --recursive
