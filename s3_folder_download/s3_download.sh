@@ -5,7 +5,7 @@
 
 
 if [[ $# != 2 ]]; then
-	echo "Not enough arguments, please enter <s3_folder_path> <local_path>"
+	echo "Not enough arguments, please enter <s3_folder_path> <local_absulote_path>"
 	exit 0
 fi
 
