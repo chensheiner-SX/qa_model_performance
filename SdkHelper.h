@@ -33,9 +33,13 @@ sdk::GroundMwirDetectorStartStreamConfiguration getDetectorConfiguration(sdk::St
     return startConfiguration.getGroundMwirDetector();
 }
 
-sdk::GroundRgbSwirDetectorStartStreamConfiguration getDetectorConfiguration(sdk::StartStreamConfiguration& startConfiguration, double x) {
+sdk::GroundRgbDetectorStartStreamConfiguration getDetectorConfiguration(sdk::StartStreamConfiguration& startConfiguration, double x) {
     //std::cout << "*-*-*-*-*-*-*-* Ground Rgb and Swir Detector *-*-*-*-*-*-*-*" << std::endl;
-    return startConfiguration.getGroundRgbSwirDetector();
+    return startConfiguration.getGroundRgbDetector();
+}
+sdk::GroundSwirDetectorStartStreamConfiguration getDetectorConfiguration(sdk::StartStreamConfiguration& startConfiguration, long x) {
+    //std::cout << "*-*-*-*-*-*-*-* Ground Rgb and Swir Detector *-*-*-*-*-*-*-*" << std::endl;
+    return startConfiguration.getGroundSwirDetector();
 }
 
 /**
@@ -56,9 +60,13 @@ sdk::GroundMwirDetectorUpdateStreamConfiguration getDetectorUpdateConfiguration(
     return stream->getConfiguration().getGroundMwirDetector();
 }
 
-sdk::GroundRgbSwirDetectorUpdateStreamConfiguration getDetectorUpdateConfiguration(std::shared_ptr<sdk::Stream>& stream, double x) {
+sdk::GroundRgbDetectorUpdateStreamConfiguration getDetectorUpdateConfiguration(std::shared_ptr<sdk::Stream>& stream, double x) {
     //std::cout << "*-*-*-*-*-*-*-* Ground Rgb and Swir Detector *-*-*-*-*-*-*-*" << std::endl;
-    return stream->getConfiguration().getGroundRgbSwirDetector();
+    return stream->getConfiguration().getGroundRgbDetector();
+}
+sdk::GroundSwirDetectorUpdateStreamConfiguration getDetectorUpdateConfiguration(std::shared_ptr<sdk::Stream>& stream, long x) {
+    //std::cout << "*-*-*-*-*-*-*-* Ground Rgb and Swir Detector *-*-*-*-*-*-*-*" << std::endl;
+    return stream->getConfiguration().getGroundSwirDetector();
 }
 /*
  * get flow tracker rate
@@ -73,8 +81,11 @@ sdk::SeaSwirTrackerRateStartStreamConfiguration getTrackerRateStartConfiguration
 sdk::GroundMwirTrackerRateStartStreamConfiguration getTrackerRateStartConfiguration(sdk::StartStreamConfiguration& startConfiguration, float x){
     return startConfiguration.getGroundMwirTrackerRate();
 }
-sdk::GroundRgbSwirTrackerRateStartStreamConfiguration getTrackerRateStartConfiguration(sdk::StartStreamConfiguration& startConfiguration, double x){
-    return startConfiguration.getGroundRgbSwirTrackerRate();
+sdk::GroundRgbTrackerRateStartStreamConfiguration getTrackerRateStartConfiguration(sdk::StartStreamConfiguration& startConfiguration, double x){
+    return startConfiguration.getGroundRgbTrackerRate();
+}
+sdk::GroundSwirTrackerRateStartStreamConfiguration getTrackerRateStartConfiguration(sdk::StartStreamConfiguration& startConfiguration, long x){
+    return startConfiguration.getGroundSwirTrackerRate();
 }
 /*
  * get flow update tracker rate
@@ -88,10 +99,12 @@ sdk::SeaSwirTrackerRateUpdateStreamConfiguration getTrackerRateUpdateConfigurati
 sdk::GroundMwirTrackerRateUpdateStreamConfiguration getTrackerRateUpdateConfiguration(std::shared_ptr<sdk::Stream>& stream, float x){
     return stream->getConfiguration().getGroundMwirTrackerRate();
 }
-sdk::GroundRgbSwirTrackerRateUpdateStreamConfiguration getTrackerRateUpdateConfiguration(std::shared_ptr<sdk::Stream>& stream, double x){
-    return stream->getConfiguration().getGroundRgbSwirTrackerRate();
+sdk::GroundRgbTrackerRateUpdateStreamConfiguration getTrackerRateUpdateConfiguration(std::shared_ptr<sdk::Stream>& stream, double x){
+    return stream->getConfiguration().getGroundRgbTrackerRate();
 }
-
+sdk::GroundSwirTrackerRateUpdateStreamConfiguration getTrackerRateUpdateConfiguration(std::shared_ptr<sdk::Stream>& stream, long x){
+    return stream->getConfiguration().getGroundSwirTrackerRate();
+}
 /*
  * get flow tracker
  * */
@@ -104,10 +117,12 @@ sdk::SeaSwirTrackerStartStreamConfiguration getTrackerStartConfiguration(sdk::St
 sdk::GroundMwirTrackerStartStreamConfiguration getTrackerStartConfiguration(sdk::StartStreamConfiguration& startConfiguration, float x){
     return startConfiguration.getGroundMwirTracker();
 }
-sdk::GroundRgbSwirTrackerStartStreamConfiguration getTrackerStartConfiguration(sdk::StartStreamConfiguration& startConfiguration, double x){
-    return startConfiguration.getGroundRgbSwirTracker();
+sdk::GroundRgbTrackerStartStreamConfiguration getTrackerStartConfiguration(sdk::StartStreamConfiguration& startConfiguration, double x){
+    return startConfiguration.getGroundRgbTracker();
 }
-
+sdk::GroundSwirTrackerStartStreamConfiguration getTrackerStartConfiguration(sdk::StartStreamConfiguration& startConfiguration, long x){
+    return startConfiguration.getGroundSwirTracker();
+}
 /*
  * get flow update tracker
  * */
@@ -120,10 +135,12 @@ sdk::SeaSwirTrackerUpdateStreamConfiguration getTrackerUpdateConfiguration(std::
 sdk::GroundMwirTrackerUpdateStreamConfiguration getTrackerUpdateConfiguration(std::shared_ptr<sdk::Stream>& stream, float x){
     return stream->getConfiguration().getGroundMwirTracker();
 }
-sdk::GroundRgbSwirTrackerUpdateStreamConfiguration getTrackerUpdateConfiguration(std::shared_ptr<sdk::Stream>& stream, double x){
-    return stream->getConfiguration().getGroundRgbSwirTracker();
+sdk::GroundRgbTrackerUpdateStreamConfiguration getTrackerUpdateConfiguration(std::shared_ptr<sdk::Stream>& stream, double x){
+    return stream->getConfiguration().getGroundRgbTracker();
 }
-
+sdk::GroundSwirTrackerUpdateStreamConfiguration getTrackerUpdateConfiguration(std::shared_ptr<sdk::Stream>& stream, long x){
+    return stream->getConfiguration().getGroundSwirTracker();
+}
 
 /**
  * Get Start Stream Postprocessors
@@ -143,9 +160,9 @@ sdk::GroundRgbSwirTrackerUpdateStreamConfiguration getTrackerUpdateConfiguration
 //     return startConfiguration.getGroundMwirPostprocessor();
 // }
 
-// sdk::GroundRgbSwirPostprocessorStartStreamConfiguration getPostprocessorConfiguration(sdk::StartStreamConfiguration& startConfiguration, double x) {
+// sdk::GroundRgbPostprocessorStartStreamConfiguration getPostprocessorConfiguration(sdk::StartStreamConfiguration& startConfiguration, double x) {
 //     std::cout << "*-*-*-*-*-*-*-* Ground Rgb and Swir Detector *-*-*-*-*-*-*-*" << std::endl;
-//     return startConfiguration.getGroundRgbSwirPostprocessor();
+//     return startConfiguration.getGroundRgbPostprocessor();
 // }
 
 // /**
@@ -166,8 +183,8 @@ sdk::GroundRgbSwirTrackerUpdateStreamConfiguration getTrackerUpdateConfiguration
 //     return stream->getConfiguration().getGroundMwirPostprocessor();
 // }
 
-// sdk::GroundRgbSwirPostprocessorUpdateStreamConfiguration getPostprocessorUpdateConfiguration(std::shared_ptr<sdk::Stream>& stream, double x) {
+// sdk::GroundRgbPostprocessorUpdateStreamConfiguration getPostprocessorUpdateConfiguration(std::shared_ptr<sdk::Stream>& stream, double x) {
 //     std::cout << "*-*-*-*-*-*-*-* Ground Rgb and Swir Detector *-*-*-*-*-*-*-*" << std::endl;
-//     return stream->getConfiguration().getGroundRgbSwirPostprocessor();
+//     return stream->getConfiguration().getGroundRgbPostprocessor();
 // }
 #endif //SDK_TESTER_SDKHELPER_H
