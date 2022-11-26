@@ -24,7 +24,7 @@
 using namespace sightx;
 
 enum streamError {
-    None,
+    NONE,
     RotateAngleUnsupported,
     RoiIncorrectSize,
     PreviewError
@@ -34,7 +34,7 @@ enum rangeError {
     RotateAngle,
     ROI,
     Threshold,
-    NONE
+    None
 };
 
 struct UserData {
@@ -60,8 +60,6 @@ struct Roi {
 std::array<std::string, 4> seaGroups = {"ship", "sailboat", "jetski", "motorboat"};
 std::array<std::string, 4> groundGroups = {"light-vehicle", "person", "two-wheeled", "None"};
 std::array<std::string, 4> currentDetectedGroups;
-
-
 std::map <sdk::FlowSwitcherFlowId, std::string> printDetectorFlow = {
         {sdk::FlowSwitcherFlowId::SeaMwir, "*-*-*-*-*-*-*-* Sea Mwir Detector *-*-*-*-*-*-*-*"},
         {sdk::FlowSwitcherFlowId::SeaSwir, "*-*-*-*-*-*-*-* Sea Swir Detector *-*-*-*-*-*-*-*"},
@@ -80,24 +78,23 @@ std::map <sdk::FlowSwitcherFlowId, std::string> printTrackerFlow = {
 };
 
 UserData data;
-streamError currentStreamError = streamError::None;
-rangeError currentRangeError = rangeError::NONE;
-std::string currentErrorStr; //TODO - check if needed afterwards
+streamError currentStreamError = streamError::NONE;
+rangeError currentRangeError = rangeError::None; // TODO - check if needed
+std::string currentErrorStr;
 FrameDimensions currentFrameDimensions;
 Roi currentRoi;
+bool isRoiTest = false;
 std::shared_ptr <sdk::Pipeline> mainPipeline;
 std::shared_ptr <sdk::Stream> currentStream;
-std::map<std::string, bool> runningStreams; //TODO - check if needed afterwards
+std::map<std::string, bool> runningStreams;
 cv::VideoCapture videoCapture;
 
-//std::string a_strVideoPath = "rtsp://root:password@172.12.10.199/axis-media/media.amp";
 std::string a_strVideoPath;
 std::string a_strServerIP;
 std::string sinkStr;
 cv::Mat matFrame;
-uint32_t numOfFrames = 500; //TODO - check if needed afterwards
+uint32_t numOfFrames = 500;
 int errorCounter = 0;
-bool isRoiTest = false; //TODO - check if needed afterwards
 
 std::string seaMwirVideo;
 std::string seaSwirVideo;
@@ -111,17 +108,25 @@ std::string ROINotInRange;
 std::string ROIUnsupported;
 std::string previewError;
 
+//template<typename T, typename S>
+//std::pair<T, S> getPair(T first, S second) {
+//    return std::pair<T, S>(first, second);
+//}
 
 bool isInRoi(sdk::BoundingBox objLocation) {
-    std::cout << "In ROI test func" << std::endl;
-    if (objLocation.X1 >= currentRoi.X && objLocation.Y1 >= currentRoi.Y && objLocation.X2 <= (currentRoi.X + currentRoi.Width) && objLocation.Y2 <= (currentRoi.Y + currentRoi.Height))
+
+    if (objLocation.X1 >= currentRoi.X && objLocation.Y1 >= currentRoi.Y &&
+        objLocation.X2 <= (currentRoi.X + currentRoi.Width) && objLocation.Y2 <= (currentRoi.Y + currentRoi.Height))
         return true;
 
-    else{
-        std::cout << "Object: [" << objLocation.X1 << "," << objLocation.Y1 << "," << objLocation.X2 << "," << objLocation.Y2 << "]" << std::endl;
-        std::cout << "ROI: [" << currentRoi.X << "," << currentRoi.Y << "," << currentRoi.X + currentRoi.Width << "," << currentRoi.Y + currentRoi.Height << std::endl;
+    else {
+        std::cout << "Object: [" << objLocation.X1 << "," << objLocation.Y1 << "," << objLocation.X2 << ","
+                  << objLocation.Y2 << "]" << std::endl;
+        std::cout << "ROI: [" << currentRoi.X << "," << currentRoi.Y << "," << currentRoi.X + currentRoi.Width
+                  << "," << currentRoi.Y + currentRoi.Height << std::endl;
         return false;
     }
+
 }
 
 void onMessage(const sdk::MessageLog &a_Log, void * /*a_pUserData*/) {
@@ -182,18 +187,6 @@ void onFrameResults(const sdk::FrameResults &a_FrameResults, void * /*a_pUserDat
                                                   "] --> [" << a_FrameResults.StreamId << ", "
                                                   << currentStream->getId().toString() << "]");
                 BOOST_TEST(isInRoi(track.DetectionData.Location));
-//        std::string *res = std::find(currentDetectedGroups.begin(), currentDetectedGroups.end(),
-//                                                                            track.DetectionData.Class.toString());
-//        BOOST_TEST(res != currentDetectedGroups.end(), "Class not in postprocessor");
-
-//        std::cout << "   Expected lowest score: " << score << std::endl;
-//        std::cout << "   Track id: " << track.TrackId << std::endl;
-//        std::cout << "   Class id: " << track.DetectionData.Class.toString() << std::endl;
-//        std::cout << "   Score: " << track.DetectionData.Score << std::endl;
-//        std::cout << "   Location: " << (int32_t)track.DetectionData.Location.X1 << "x" << (int32_t)track.DetectionData.Location.Y1 << "-"
-//                  << (int32_t)track.DetectionData.Location.X2 << "x" << (int32_t)track.DetectionData.Location.Y2 << std::endl;
-//        std::cout << "   Velocity: " << track.Velocity.X << "x" << track.Velocity.Y << std::endl;
-//        std::cout << std::endl;
             }
         }
     }
@@ -234,7 +227,7 @@ void streamErrorTest(const std::string &errorCaught, const std::string &streamId
                 break;
         }
     }
-    currentStreamError = streamError::None;
+    currentStreamError = streamError::NONE;
 }
 
 void outOfRangeErrorTest(const std::string &errorMsg) {
@@ -284,12 +277,6 @@ void onStreamEvent(const sdk::StreamLog &a_StreamLog, void *a_pUserData) {
             std::cout << "Stream " << a_StreamLog.StreamId.toString() << " got end-of-stream" << std::endl;
             break;
     }
-
-//    std::cout << "running streams:" << std::endl;
-//    for (const std::pair stream : runningStreams) {
-//        std::cout << stream.first << ", " << stream.second << std::endl;
-//    }
-
     pUserData->Condition.notify_one();
 }
 
@@ -340,9 +327,9 @@ void run() {
     ROINotInRange = "is not in range of 0 and 8192";
     ROIUnsupported = "Invalid ROI";
     previewError = "Failed to open display; can't use CVPreview";
-    currentRangeError = rangeError::NONE;
+//    currentRangeError = rangeError::None; // TODO -check if needed
     a_strVideoPath = seaMwirVideo;
-    // a_strVideoPath = "rtsp://root:password@172.12.10.199/axis-media/media.amp";
+//    a_strVideoPath = "rtsp://root:password@172.12.10.199/axis-media/media.amp";
     a_strServerIP = "172.12.10.33";
     sinkStr = "rtsp://172.12.60.124:8554/sdk_test";
     currentDetectedGroups = seaGroups;
@@ -373,16 +360,6 @@ void run() {
             callbacks);
 
     std::this_thread::sleep_for(std::chrono::milliseconds(2000));
-
-//    {
-//        std::unique_lock<std::mutex> lock(data.Mutex);
-//        data.Condition.wait_for(lock, std::chrono::seconds(10), []() { return data.ServerState; });
-//        if (!data.ServerState)
-//        {
-//            std::cerr << "Couldn't connect to the server for 10 seconds, exiting" << std::endl;
-//            exit(-1);
-//        }
-//    }
 }
 
 namespace std //NOLINT
@@ -558,7 +535,7 @@ void waitForStreamStarted(const std::shared_ptr<sdk::Stream> &stream) {
 //        }
 //    }
 //    catch(...) {std::cout << "Here" << std::endl;}
-    std::cout << "Waiting for stream: " << stream->getId().toString() << std::endl;
+    std::cout << "\nWaiting for stream: " << stream->getId().toString() << std::endl;
     std::unique_lock<std::mutex> lock(data.Mutex);
     data.Condition.wait_for(lock, std::chrono::seconds(10), []() { return data.StreamState; });
     if (!data.StreamState) {
@@ -569,6 +546,17 @@ void waitForStreamStarted(const std::shared_ptr<sdk::Stream> &stream) {
     currentStream = stream;
 }
 
+void waitForStreamStopped(const std::shared_ptr<sdk::Stream>& stream){ // TODO - try and fix this function
+    std::cout << "\nWaiting for stream: " << stream->getId().toString() << " to stop" << std::endl;
+    std::unique_lock<std::mutex> lock(data.Mutex);
+    data.Condition.wait_for(lock, std::chrono::seconds(10), []() { return data.StreamState; });
+    if (!data.StreamState) {
+        std::cerr << "Couldn't start stream for 10 seconds, exiting" << std::endl;
+//        exit(-1);
+        throw std::exception();
+    }
+}
+
 sdk::StartStreamConfiguration getStartConfiguration(const std::string &customSettings = "stream_settings.bin") {
     sdk::StartStreamConfiguration startConfiguration = mainPipeline->createStartStreamConfiguration(customSettings);
     startConfiguration.getRawSource();
@@ -577,22 +565,130 @@ sdk::StartStreamConfiguration getStartConfiguration(const std::string &customSet
     return startConfiguration;
 }
 
-template<typename CONF, typename T>
-void roiTestFunc(bool isUpdate, sdk::FlowSwitcherFlowId flowId) {
 
-    std::cout << "\n" << printDetectorFlow[flowId] << std::endl;
-//    currentRangeError = rangeError::ROI;
+void rotateAngleTestFunc(sdk::FlowSwitcherFlowId flowId){
+    std::cout << printDetectorFlow[flowId] << std::endl;
+    sdk::StartStreamConfiguration startConfiguration;
     errorCounter = 0;
+
+    BOOST_TEST_MESSAGE("\nRotate angle valid angle test\n");
     try {
-        std::this_thread::sleep_for(std::chrono::milliseconds(2000));
-        errorCounter = 0;
-        BOOST_TEST_MESSAGE("Valid ROI test");
-        /**
-         * Test valid ROI for 100 frames
-         */
-        sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
+        startConfiguration = getStartConfiguration();
+        BOOST_TEST_MESSAGE(startConfiguration.getPreprocessor().minRotateAngle());
+        std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConfiguration);
+        waitForStreamStarted(stream);
+        sendFrames(stream, 15,
+                   [&stream](uint32_t nFrameId) {
+                       if (nFrameId == 5)
+                           BOOST_TEST(stream->getFullConfiguration().getPreprocessor().getRotateAngle() == 0);
+                   }
+        );
+
+        int angle;
+        for (int i = 1; i < 4; i++) {
+            try {
+
+                angle = i * 90;
+                BOOST_TEST_MESSAGE(angle);
+                startConfiguration = getStartConfiguration();
+                startConfiguration.getPreprocessor().setRotateAngle(angle);
+                std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+                stream = mainPipeline->startStream(startConfiguration);
+                waitForStreamStarted(stream);
+                sendFrames(stream, 15, [&stream, angle](uint32_t nFrameId) {
+                               if (nFrameId == 5)
+                                   BOOST_TEST(stream->getFullConfiguration().getPreprocessor().getRotateAngle() == angle);
+                           }
+                );
+            }
+            catch (sdk::Exception &e) {
+                BOOST_TEST(((std::string) e.what()).find("not registered") != std::string::npos,
+                           "Caught unexpected error: " + (std::string) e.what());
+            }
+        }
+        stream.reset();
+    }
+    catch (sdk::Exception& e) {
+        BOOST_TEST(((std::string) e.what()).find("not registered") != std::string::npos,
+                   "Caught unexpected error: " + (std::string) e.what());
+    }
+
+    BOOST_TEST_MESSAGE("\nRotate angle out of range test\n");
+
+    try {
+        startConfiguration = getStartConfiguration();
+        BOOST_TEST_MESSAGE(startConfiguration.getPreprocessor().minRotateAngle() - 1);
+        errorCounter++;
+        startConfiguration.getPreprocessor().setRotateAngle(startConfiguration.getPreprocessor().minRotateAngle() - 1);
+    }
+    catch (const sdk::Exception& e) {
+        outOfRangeErrorTest((std::string) e.what());
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+
+    try {
+        startConfiguration = getStartConfiguration();
+        BOOST_TEST_MESSAGE(startConfiguration.getPreprocessor().maxRotateAngle() + 1);
+        errorCounter++;
+        startConfiguration.getPreprocessor().setRotateAngle(startConfiguration.getPreprocessor().maxRotateAngle() + 1);
+    }
+    catch (const sdk::Exception& e) {
+        outOfRangeErrorTest((std::string) e.what());
+    }
+    BOOST_TEST(errorCounter == 0, "Not all expected errors returned! Number of missed errors: " + std::to_string(errorCounter));
+//    currentRangeError = rangeError::None; // TODO - check if needed
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+
+    BOOST_TEST_MESSAGE("\nRotate angle unsupported test\n");
+    int angle;
+    for (int i = 0; i < 9; i++) {
+        try {
+            currentStreamError = streamError::RotateAngleUnsupported;
+            currentErrorStr = rotateAngleUnsupported;
+            std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+            angle = (int) (random() % 270) + 1;
+            BOOST_TEST_MESSAGE(angle);
+            startConfiguration = getStartConfiguration();
+            startConfiguration.getPreprocessor().setRotateAngle(angle);
+            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+            errorCounter++;
+            std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConfiguration);
+            if (angle % 90 == 0) {
+                currentStreamError = streamError::NONE;
+                errorCounter = errorCounter > 0 ? errorCounter - 1 : 0;
+            } else {
+                waitForStreamStarted(stream);
+                sendFrames(stream, 10, nullptr);
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+//                    currentStreamError = streamError::RotateAngleNotInRange;
+        }
+        catch (sdk::Exception &e) {
+            BOOST_TEST(((std::string) e.what()).find("not registered") != std::string::npos,
+                       "Caught unexpected error: " + (std::string) e.what());
+        }
+    }
+    BOOST_TEST(errorCounter == 0, "Not all expected errors returned! Number of missed errors: " + std::to_string(errorCounter));
+}
+template<typename CONF, typename T>
+void roiTestFunc(sdk::FlowSwitcherFlowId flowId) {
+
+    std::cout << printDetectorFlow[flowId] << std::endl;
+    sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
+    CONF conf = getDetectorConfiguration(startConfiguration, (T) 1.0);
+    errorCounter = 0;
+    isRoiTest = true;
+    BOOST_TEST_MESSAGE("\nValid ROI test\n");
+
+    /**
+    * Test valid ROI for 100 frames
+    */
+    try {
+        startConfiguration = getStartConfiguration();
         startConfiguration.getFlowSwitcher().setFlowId(flowId);
-        CONF conf = getDetectorConfiguration(startConfiguration, (T) 1.0);
+        conf = getDetectorConfiguration(startConfiguration, (T) 1.0);
+        //TODO - implement here random valid roi depends on currentFrameDimension.Width/Height
         conf.getRoi().setX(100);
         conf.getRoi().setY(100);
         conf.getRoi().setHeight(100);
@@ -603,32 +699,32 @@ void roiTestFunc(bool isUpdate, sdk::FlowSwitcherFlowId flowId) {
                 100,
                 100
         };
-        isRoiTest = true;
         std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConfiguration);
         waitForStreamStarted(stream);
-        sendFrames(stream, 100, nullptr); // TODO - change back to 100
+        sendFrames(stream, 100, nullptr);
         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-        stream.reset();
+//        waitForStreamStopped(stream); // TODO - implement stop stream func depends on threading
+//        stream.reset();
         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     }
     catch (sdk::Exception &e) {
         BOOST_TEST(((std::string) e.what()).find("not registered") != std::string::npos, "Caught unexpected error: " + (std::string) e.what());
     }
 
+    /**
+    * Test valid ROI for 100 frames with height/width set to default
+    */
     try {
-        /**
-         * Test valid ROI for 100 frames with height/width set to default
-         */
-        sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
+        startConfiguration = getStartConfiguration();
         startConfiguration.getFlowSwitcher().setFlowId(flowId);
         CONF conf = getDetectorConfiguration(startConfiguration, (T) 1.0);
         conf.getRoi().setX(100);
         conf.getRoi().setY(100);
         currentRoi = {
-                100,
-                100,
-                currentFrameDimensions.Width,
-                currentFrameDimensions.Height
+                (float) conf.getRoi().getX(),
+                (float) conf.getRoi().getY(),
+                currentFrameDimensions.Width - (float)(conf.getRoi().getX()),
+                currentFrameDimensions.Height - (float)(conf.getRoi().getX())
         };
         std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConfiguration);
         waitForStreamStarted(stream);
@@ -642,139 +738,134 @@ void roiTestFunc(bool isUpdate, sdk::FlowSwitcherFlowId flowId) {
                    "Caught unexpected error: " + (std::string) e.what());
     }
 
-    BOOST_TEST_MESSAGE("Testing ROI out of range...");
-    sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
 
-    int minHeight = startConfiguration.getPreprocessor().getRoi().minHeight();
-    size_t maxHeight = startConfiguration.getPreprocessor().getRoi().maxHeight();
-    int minWidth = startConfiguration.getPreprocessor().getRoi().minWidth();
-    size_t maxWidth = startConfiguration.getPreprocessor().getRoi().maxWidth();
-    int minX = startConfiguration.getPreprocessor().getRoi().minX();
-    size_t maxX = startConfiguration.getPreprocessor().getRoi().maxX();
-    int minY = startConfiguration.getPreprocessor().getRoi().minY();
-    size_t maxY = startConfiguration.getPreprocessor().getRoi().maxY();
+    BOOST_TEST_MESSAGE("\nOuf of range ROI test\n");
+    errorCounter = 0;
+    startConfiguration = getStartConfiguration();
+    conf = getDetectorConfiguration(startConfiguration, (T) 1.0);
+
+    int minHeight = conf.getRoi().minHeight();
+    size_t maxHeight = conf.getRoi().maxHeight();
+    int minWidth = conf.getRoi().minWidth();
+    size_t maxWidth = conf.getRoi().maxWidth();
+    int minX = conf.getRoi().minX();
+    size_t maxX = conf.getRoi().maxX();
+    int minY = conf.getRoi().minY();
+    size_t maxY = conf.getRoi().maxY();
 
 
     try {
-        startConfiguration.getFlowSwitcher().setFlowId(flowId);
-        CONF conf = getDetectorConfiguration(startConfiguration, (T) 1.0);
+        conf = getDetectorConfiguration(startConfiguration, (T) 1.0);
         BOOST_TEST_MESSAGE("Height=" + std::to_string(maxHeight + 1));
         errorCounter++;
-        startConfiguration.getPreprocessor().getRoi().setHeight(maxHeight + 1);
+        conf.getRoi().setHeight(maxHeight + 1);
     }
     catch(const sdk::Exception& e){
         outOfRangeErrorTest((std::string) e.what());
     }
     std::this_thread::sleep_for(std::chrono::milliseconds(2000));
-    startConfiguration = getStartConfiguration();
     try{
-        startConfiguration.getFlowSwitcher().setFlowId(flowId);
-        CONF conf = getDetectorConfiguration(startConfiguration, (T) 1.0);
+        startConfiguration = getStartConfiguration();
+        conf = getDetectorConfiguration(startConfiguration, (T) 1.0);
         BOOST_TEST_MESSAGE("Height=" + std::to_string(minHeight - 1));
         errorCounter++;
-        startConfiguration.getPreprocessor().getRoi().setHeight(minHeight - 1);
+        conf.getRoi().setHeight(minHeight - 1);
     }
     catch (const sdk::Exception& e) {
         outOfRangeErrorTest((std::string) e.what());
 
     }
     std::this_thread::sleep_for(std::chrono::milliseconds(2000));
-    startConfiguration = getStartConfiguration();
     try{
-        startConfiguration.getFlowSwitcher().setFlowId(flowId);
-        CONF conf = getDetectorConfiguration(startConfiguration, (T) 1.0);
+        startConfiguration = getStartConfiguration();
+        conf = getDetectorConfiguration(startConfiguration, (T) 1.0);
         BOOST_TEST_MESSAGE("Width=" + std::to_string(maxWidth + 1));
         errorCounter++;
-        startConfiguration.getPreprocessor().getRoi().setWidth(maxWidth + 1);
+        conf.getRoi().setWidth(maxWidth + 1);
     }
     catch (const sdk::Exception& e) {
         outOfRangeErrorTest((std::string) e.what());
     }
     std::this_thread::sleep_for(std::chrono::milliseconds(2000));
-    startConfiguration = getStartConfiguration();
     try{
-        startConfiguration.getFlowSwitcher().setFlowId(flowId);
-        CONF conf = getDetectorConfiguration(startConfiguration, (T) 1.0);
+        startConfiguration = getStartConfiguration();
+        conf = getDetectorConfiguration(startConfiguration, (T) 1.0);
         BOOST_TEST_MESSAGE("Width=" + std::to_string(minWidth - 1));
         errorCounter++;
-        startConfiguration.getPreprocessor().getRoi().setWidth(minWidth - 1);
+        conf.getRoi().setWidth(minWidth - 1);
     }
     catch (const sdk::Exception& e) {
         outOfRangeErrorTest((std::string) e.what());
 
     }
     std::this_thread::sleep_for(std::chrono::milliseconds(2000));
-    startConfiguration = getStartConfiguration();
     try{
-        startConfiguration.getFlowSwitcher().setFlowId(flowId);
-        CONF conf = getDetectorConfiguration(startConfiguration, (T) 1.0);
+        startConfiguration = getStartConfiguration();
+        conf = getDetectorConfiguration(startConfiguration, (T) 1.0);
         BOOST_TEST_MESSAGE("X=" + std::to_string(maxX + 1));
         errorCounter++;
-        startConfiguration.getPreprocessor().getRoi().setX(maxX + 1);
+        conf.getRoi().setX(maxX + 1);
     }
     catch (const sdk::Exception& e) {
         outOfRangeErrorTest((std::string) e.what());
 
     }
     std::this_thread::sleep_for(std::chrono::milliseconds(2000));
-    startConfiguration = getStartConfiguration();
     try{
-        startConfiguration.getFlowSwitcher().setFlowId(flowId);
-        CONF conf = getDetectorConfiguration(startConfiguration, (T) 1.0);
+        startConfiguration = getStartConfiguration();
+        conf = getDetectorConfiguration(startConfiguration, (T) 1.0);
         BOOST_TEST_MESSAGE("X=" + std::to_string(minX - 1));
         errorCounter++;
-        startConfiguration.getPreprocessor().getRoi().setX(minX - 1);
+        conf.getRoi().setX(minX - 1);
     }
     catch (const sdk::Exception& e) {
         outOfRangeErrorTest((std::string) e.what());
 
     }
     std::this_thread::sleep_for(std::chrono::milliseconds(2000));
-    startConfiguration = getStartConfiguration();
     try{
-        startConfiguration.getFlowSwitcher().setFlowId(flowId);
-        CONF conf = getDetectorConfiguration(startConfiguration, (T) 1.0);
+        startConfiguration = getStartConfiguration();
+        conf = getDetectorConfiguration(startConfiguration, (T) 1.0);
         BOOST_TEST_MESSAGE("Y=" + std::to_string(maxY + 1));
         errorCounter++;
-        startConfiguration.getPreprocessor().getRoi().setY(maxY + 1);
+        conf.getRoi().setY(maxY + 1);
     }
     catch (const sdk::Exception& e) {
         outOfRangeErrorTest((std::string) e.what());
 
     }
     std::this_thread::sleep_for(std::chrono::milliseconds(2000));
-    startConfiguration = getStartConfiguration();
     try{
-        startConfiguration.getFlowSwitcher().setFlowId(flowId);
-        CONF conf = getDetectorConfiguration(startConfiguration, (T) 1.0);
+        startConfiguration = getStartConfiguration();
+        conf = getDetectorConfiguration(startConfiguration, (T) 1.0);
         BOOST_TEST_MESSAGE("Y=" + std::to_string(minY - 1));
         errorCounter++;
-        startConfiguration.getPreprocessor().getRoi().setY(minY - 1);
+        conf.getRoi().setY(minY - 1);
     }
     catch (const sdk::Exception& e) {
         outOfRangeErrorTest((std::string) e.what());
     }
+    BOOST_TEST(errorCounter == 0, "Not all Out of range ROI expected errors returned! Number of missed errors: " + std::to_string(errorCounter));
 
-    currentRangeError = rangeError::NONE;
+    BOOST_TEST_MESSAGE("\nUnsupported ROI test\n");
+    errorCounter = 0;
+    startConfiguration = getStartConfiguration();
+    currentStreamError = streamError::RoiIncorrectSize;
+    currentErrorStr = ROIUnsupported;
+    conf = getDetectorConfiguration(startConfiguration, (T) 1.0);
 
     /**
      * width out of frame
      */
     try {
-        BOOST_TEST_MESSAGE("ROI incorrect size test");
-        currentStreamError = streamError::RoiIncorrectSize;
-//        stream.reset();
-        errorCounter = 0;
-        sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
-        startConfiguration.getFlowSwitcher().setFlowId(flowId);
-        CONF conf = getDetectorConfiguration(startConfiguration, (T) 1.0);
+        startConfiguration = getStartConfiguration();
+        conf = getDetectorConfiguration(startConfiguration, (T) 1.0);
         conf.getRoi().setX(100);
         conf.getRoi().setWidth((uint32_t)(100 + currentFrameDimensions.Width));
-//        conf.getRoi().setHeight(1);  // uncomment to avoid error at end of test
         errorCounter++;
         std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConfiguration);
         waitForStreamStarted(stream);
-        sendFrames(stream, 10, nullptr);
+        sendFrames(stream, 50, nullptr);
         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     }
     catch (sdk::Exception &e) {
@@ -786,31 +877,67 @@ void roiTestFunc(bool isUpdate, sdk::FlowSwitcherFlowId flowId) {
      * height out of frame
      */
     try {
-        currentStreamError = streamError::RoiIncorrectSize;
-        sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
-        startConfiguration.getFlowSwitcher().setFlowId(flowId);
-        CONF conf = getDetectorConfiguration(startConfiguration, (T) 1.0);
+        startConfiguration = getStartConfiguration();
+        conf = getDetectorConfiguration(startConfiguration, (T) 1.0);
         conf.getRoi().setY(100);
         conf.getRoi().setHeight((uint32_t)(100 + currentFrameDimensions.Height));
-//        conf.getRoi().setWidth(1); // uncomment to avoid error at end of test
         errorCounter++;
         std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConfiguration);
         waitForStreamStarted(stream);
-        sendFrames(stream, 10, nullptr);
+        sendFrames(stream, 50, nullptr);
         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     }
     catch (sdk::Exception &e) {
         BOOST_TEST(((std::string) e.what()).find("not registered") != std::string::npos,
                    "Caught unexpected error: " + (std::string) e.what());
     }
-    // TODO(NOTE) - We recive here 2 errors because of width/height out of frame but height/width (in accordance) are 0, ask Oleg about this
-    BOOST_TEST(errorCounter == 0, "Not all expected errors returned! Number of missed errors: " + std::to_string(errorCounter));
+
+    /**
+     * X out of frame
+     */
+
+    try {
+        startConfiguration = getStartConfiguration();
+        conf = getDetectorConfiguration(startConfiguration, (T) 1.0);
+        conf.getRoi().setX((uint32_t)(100 + currentFrameDimensions.Width));
+        errorCounter++;
+        std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConfiguration);
+        waitForStreamStarted(stream);
+        sendFrames(stream, 50, nullptr);
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+    }
+    catch (sdk::Exception &e) {
+        BOOST_TEST(((std::string) e.what()).find("not registered") != std::string::npos,
+                   "Caught unexpected error: " + (std::string) e.what());
+    }
+
+    /**
+     * Y out of frame
+     */
+
+    try {
+        startConfiguration = getStartConfiguration();
+        conf = getDetectorConfiguration(startConfiguration, (T) 1.0);
+        conf.getRoi().setY((uint32_t)(100 + currentFrameDimensions.Height));
+        errorCounter++;
+        std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConfiguration);
+        waitForStreamStarted(stream);
+        sendFrames(stream, 50, nullptr);
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+    }
+    catch (sdk::Exception &e) {
+        BOOST_TEST(((std::string) e.what()).find("not registered") != std::string::npos,
+                   "Caught unexpected error: " + (std::string) e.what());
+    }
+    BOOST_TEST(errorCounter == 0, "Not all unsupported ROI expected errors returned! Number of missed errors: " + std::to_string(errorCounter));
+    isRoiTest = false;
 }
 
 template<typename CONF, typename T>
 void updateRoiTestFunc(sdk::FlowSwitcherFlowId flowId) {
-    std::cout << "\n" << printDetectorFlow[flowId] << std::endl;
+    std::cout << printDetectorFlow[flowId] << std::endl;
     errorCounter = 0;
+    isRoiTest = true;
 
     sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
     startConfiguration.getFlowSwitcher().setFlowId(flowId);
@@ -819,26 +946,34 @@ void updateRoiTestFunc(sdk::FlowSwitcherFlowId flowId) {
     std::this_thread::sleep_for(std::chrono::milliseconds(2000));
     CONF conf = getDetectorUpdateConfiguration(stream, (T) 1.0);
 
-    int minHeight = startConfiguration.getPreprocessor().getRoi().minHeight();
-    size_t maxHeight = startConfiguration.getPreprocessor().getRoi().maxHeight();
-    int minWidth = startConfiguration.getPreprocessor().getRoi().minWidth();
-    size_t maxWidth = startConfiguration.getPreprocessor().getRoi().maxWidth();
-    int minX = startConfiguration.getPreprocessor().getRoi().minX();
-    size_t maxX = startConfiguration.getPreprocessor().getRoi().maxX();
-    int minY = startConfiguration.getPreprocessor().getRoi().minY();
-    size_t maxY = startConfiguration.getPreprocessor().getRoi().maxY();
+    //TODO - change all values to more generic method (if preprocessor will "delete")
+    int minHeight = conf.getRoi().minHeight();
+    size_t maxHeight = conf.getRoi().maxHeight();
+    int minWidth = conf.getRoi().minWidth();
+    size_t maxWidth = conf.getRoi().maxWidth();
+    int minX = conf.getRoi().minX();
+    size_t maxX = conf.getRoi().maxX();
+    int minY = conf.getRoi().minY();
+    size_t maxY = conf.getRoi().maxY();
 
-    BOOST_TEST_MESSAGE("Valid Roi update test");
+    BOOST_TEST_MESSAGE("\nValid Roi update test\n");
     try{
-        BOOST_TEST_MESSAGE("(X:100, Y:100, W:100, H:100)");
+//        BOOST_TEST_MESSAGE("(X:100, Y:100, W:100, H:100)");
         conf.getRoi().setX(100);
         conf.getRoi().setY(100);
         conf.getRoi().setWidth(100);
         conf.getRoi().setHeight(100);
 
+        currentRoi = {
+            (float) conf.getRoi().getX(),
+            (float) conf.getRoi().getY(),
+            (float) conf.getRoi().getWidth(),
+            (float) conf.getRoi().getHeight()
+        };
+
         stream->update();
 
-        sendFrames(stream, 100, [&stream, &conf](uint32_t nFrameId){
+        sendFrames(stream, 100, [&conf](uint32_t nFrameId){
            if (nFrameId == 10) {
                BOOST_TEST(conf.getRoi().getX() == 100);
                BOOST_TEST(conf.getRoi().getY() == 100);
@@ -851,8 +986,35 @@ void updateRoiTestFunc(sdk::FlowSwitcherFlowId flowId) {
         errorCounter++;
         std::cerr << "Caught unexpected error: " + (std::string) e.what() << std::endl;
     }
+    try{
+        BOOST_TEST_MESSAGE("(X:100, Y:100, W:100, H:100)");
+        conf.getRoi().setX(100);
+        conf.getRoi().setY(100);
 
-    BOOST_TEST_MESSAGE("Out of range ROI update");
+        currentRoi = {
+                (float) conf.getRoi().getX(),
+                (float) conf.getRoi().getY(),
+                currentFrameDimensions.Width - (float)(conf.getRoi().getX()),
+                currentFrameDimensions.Height - (float)(conf.getRoi().getX())
+        };
+
+        stream->update();
+
+        sendFrames(stream, 100, [&conf](uint32_t nFrameId){
+            if (nFrameId == 10) {
+                BOOST_TEST(conf.getRoi().getX() == 100);
+                BOOST_TEST(conf.getRoi().getY() == 100);
+            }
+        });
+    }
+    catch (const sdk::Exception& e) {
+        errorCounter++;
+        std::cerr << "Caught unexpected error: " + (std::string) e.what() << std::endl;
+    }
+    BOOST_TEST(errorCounter == 0, "Not all valid update ROI expected errors returned! Number of missed errors: " + std::to_string(errorCounter));
+
+    BOOST_TEST_MESSAGE("\nOut of range ROI update test\n");
+    errorCounter = 0;
     try{
         BOOST_TEST_MESSAGE("X=" + std::to_string(minX - 1));
         errorCounter++;
@@ -924,17 +1086,20 @@ void updateRoiTestFunc(sdk::FlowSwitcherFlowId flowId) {
     catch (const sdk::Exception& e) {
         outOfRangeErrorTest((std::string) e.what());
     }
+    BOOST_TEST(errorCounter == 0, "Not all update ROI out of range expected errors returned! Number of missed errors: " + std::to_string(errorCounter));
 
-    BOOST_TEST_MESSAGE("Unsupported ROI update");
-    /*
+
+    BOOST_TEST_MESSAGE("\nUnsupported ROI update test\n");
+    errorCounter = 0;
+    currentErrorStr = ROIUnsupported;
+    currentStreamError = streamError::RoiIncorrectSize;
+
+    /**
      * Width out of frame
-     * */
+     */
     try{
-        currentStreamError = streamError::RoiIncorrectSize;
         errorCounter++;
-        currentErrorStr = ROIUnsupported;
         std::this_thread::sleep_for(std::chrono::milliseconds(2000));
-
         startConfiguration = getStartConfiguration();
         startConfiguration.getFlowSwitcher().setFlowId(flowId);
         stream = mainPipeline->startStream(startConfiguration);
@@ -942,62 +1107,48 @@ void updateRoiTestFunc(sdk::FlowSwitcherFlowId flowId) {
         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
         conf = getDetectorUpdateConfiguration(stream, (T) 1.0);
 
-        sendFrames(stream, 20, [&stream, &conf](uint32_t nFrameId){
-           if(nFrameId == 5){
-               currentStreamError = streamError::RoiIncorrectSize;
-               conf.getRoi().setX(100);
+        sendFrames(stream, 100, [&stream, &conf](uint32_t nFrameId){
+           if(nFrameId == 10){
                conf.getRoi().setWidth((uint32_t) (100 + currentFrameDimensions.Width));
-               conf.getRoi().setHeight(1);
+//               conf.getRoi().setHeight(1);
                stream->update();
-               errorCounter = errorCounter > 0 ? errorCounter - 1 : 0;
            }
         });
         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     }
     catch (const sdk::Exception& e) {
-        errorCounter++;
         std::cerr << "Caught unexpected error: " + (std::string) e.what() << std::endl;
     }
-    /*
+    /**
      * Height out of frame
-     * */
+     */
     try{
-        currentStreamError = streamError::RoiIncorrectSize;
         errorCounter++;
-        currentErrorStr = ROIUnsupported;
         std::this_thread::sleep_for(std::chrono::milliseconds(2000));
-
         startConfiguration = getStartConfiguration();
         startConfiguration.getFlowSwitcher().setFlowId(flowId);
-        startConfiguration.getRenderer().getOsd().setSkipRendering(true);
         stream = mainPipeline->startStream(startConfiguration);
         waitForStreamStarted(stream);
         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
         conf = getDetectorUpdateConfiguration(stream, (T) 1.0);
 
-        sendFrames(stream, 20, [&stream, &conf](uint32_t nFrameId){
-            if(nFrameId == 5){
-
-                conf.getRoi().setY(100);
+        sendFrames(stream, 100, [&stream, &conf](uint32_t nFrameId){
+            if(nFrameId == 10){
                 conf.getRoi().setHeight((uint32_t) (100 + currentFrameDimensions.Height));
-                conf.getRoi().setWidth(1);
                 stream->update();
-                errorCounter = errorCounter > 0 ? errorCounter - 1 : 0;
             }
         });
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     }
     catch (const sdk::Exception& e) {
-        errorCounter++;
         std::cerr << "Caught unexpected error: " + (std::string) e.what() << std::endl;
     }
-    /*
-     * X out of frame */
+    /**
+     * X out of frame
+     */
     try{
-        currentStreamError = streamError::RoiIncorrectSize;
         errorCounter++;
-        currentErrorStr = ROIUnsupported;
         std::this_thread::sleep_for(std::chrono::milliseconds(2000));
-
         startConfiguration = getStartConfiguration();
         startConfiguration.getFlowSwitcher().setFlowId(flowId);
         stream = mainPipeline->startStream(startConfiguration);
@@ -1005,28 +1156,23 @@ void updateRoiTestFunc(sdk::FlowSwitcherFlowId flowId) {
         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
         conf = getDetectorUpdateConfiguration(stream, (T) 1.0);
 
-        sendFrames(stream, 20, [&stream, &conf](uint32_t nFrameId){
-            if(nFrameId == 5){
-                conf.getRoi().setX((uint32_t)(100 + currentFrameDimensions.Width));
-                conf.getRoi().setY(1);
+        sendFrames(stream, 100, [&stream, &conf](uint32_t nFrameId){
+            if(nFrameId == 10){
+                conf.getRoi().setX((uint32_t) (100 + currentFrameDimensions.Width));
                 stream->update();
-                errorCounter = errorCounter > 0 ? errorCounter - 1 : 0;
             }
         });
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     }
     catch (const sdk::Exception& e) {
-        errorCounter++;
         std::cerr << "Caught unexpected error: " + (std::string) e.what() << std::endl;
     }
-    /*
+    /**
      * Y out of frame
-     * */
+     */
     try{
-        currentStreamError = streamError::RoiIncorrectSize;
         errorCounter++;
-        currentErrorStr = ROIUnsupported;
         std::this_thread::sleep_for(std::chrono::milliseconds(2000));
-
         startConfiguration = getStartConfiguration();
         startConfiguration.getFlowSwitcher().setFlowId(flowId);
         stream = mainPipeline->startStream(startConfiguration);
@@ -1034,22 +1180,21 @@ void updateRoiTestFunc(sdk::FlowSwitcherFlowId flowId) {
         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
         conf = getDetectorUpdateConfiguration(stream, (T) 1.0);
 
-        sendFrames(stream, 20, [&stream, &conf](uint32_t nFrameId){
-            if(nFrameId == 5){
-                conf.getRoi().setY((uint32_t)(1 + currentFrameDimensions.Height));
+        sendFrames(stream, 100, [&stream, &conf](uint32_t nFrameId){
+            if(nFrameId == 10){
+                conf.getRoi().setY((uint32_t) (100 + currentFrameDimensions.Height));
                 stream->update();
-                errorCounter = errorCounter > 0 ? errorCounter - 1 : 0;
             }
         });
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     }
     catch (const sdk::Exception& e) {
-        errorCounter++;
         std::cerr << "Caught unexpected error: " + (std::string) e.what() << std::endl;
     }
 
-    BOOST_TEST(errorCounter == 0, "Not all expected errors returned! Number of missed errors: " + std::to_string(errorCounter));
+    BOOST_TEST(errorCounter == 0, "Not all update ROI unsupported expected errors returned! Number of missed errors: " + std::to_string(errorCounter));
+    isRoiTest = false;
 }
-
 
 template<typename CONF, typename T>
 void thresholdTestFunc(const std::array<std::string, 4> &groups, sdk::FlowSwitcherFlowId flowId) {
@@ -1083,7 +1228,7 @@ void thresholdTestFunc(const std::array<std::string, 4> &groups, sdk::FlowSwitch
         try {
             BOOST_TEST_MESSAGE("1.1");
             errorCounter++;
-            currentRangeError = rangeError::Threshold;
+//            currentRangeError = rangeError::Threshold; // TODO -check if needed
             sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
             CONF conf = getDetectorConfiguration(startConfiguration, (T) 1.0);
             conf.getGroups(group).setScoreThreshold(1.1);
@@ -2125,6 +2270,67 @@ BOOST_AUTO_TEST_CASE(run_tests) { // NOLINT
         run();
 }
 
+//BOOST_AUTO_TEST_SUITE(input_source) // NOLINT
+//BOOST_AUTO_TEST_CASE(no_input){
+//    try{
+//        sdk::StartStreamConfiguration startConfiguration = mainPipeline->createStartStreamConfiguration("stream_settings.bin");
+//        std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConfiguration);
+//        waitForStreamStarted(stream);
+//    }
+//    catch(const sdk::Exception& e){
+//        std::cout << (std::string) e.what() << std::endl; // TODO - check what exception message we get and use boost test
+//    }
+//}
+//BOOST_AUTO_TEST_CASE(raw_source){
+//    try {
+//        sdk::StartStreamConfiguration startConfiguration = mainPipeline->createStartStreamConfiguration("stream_settings.bin");
+//        startConfiguration.getRawSource();
+//
+//        BOOST_TEST(startConfiguration.getRawSource().getMode() == sdk::RawSourceMode::Stream);
+//        BOOST_TEST(startConfiguration.getRawSource().getReadTimeoutInSec() == 5);
+//        BOOST_TEST(startConfiguration.getRawSource().getSingleFrameTimeoutInSec() == 3);
+//        BOOST_TEST(startConfiguration.getRawSource().getPort() == 0);
+//
+//        startConfiguration.getRawSource().setReadTimeoutInSec(0);
+//        std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConfiguration);
+//        waitForStreamStarted(stream);
+//        std::this_thread::sleep_for(std::chrono::milliseconds(3000));
+//        if(stream->getStreamInfo().UpTime < 2)
+//            throw sdk::Exception("Stream not started with raw source enabled");
+//    }
+//    catch(const sdk::Exception& e){
+//        BOOST_TEST_MESSAGE((std::string) e.what());
+//    }
+//}
+//
+//BOOST_AUTO_TEST_CASE(gc_source){
+//    try {
+//        sdk::StartStreamConfiguration startConfiguration = mainPipeline->createStartStreamConfiguration("stream_settings.bin");
+//        startConfiguration.getGcSource();
+//
+//        BOOST_TEST(startConfiguration.getGcSource().getTimeoutInSec() == 10);
+//        BOOST_TEST(startConfiguration.getGcSource().getUrl() == "");
+//        BOOST_TEST(startConfiguration.getGcSource().getDeviceAccessMode() == sdk::DeviceAccess::Control);
+//
+//        startConfiguration.getRawSource().setReadTimeoutInSec(0);
+//        std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConfiguration);
+//        waitForStreamStarted(stream);
+//        std::this_thread::sleep_for(std::chrono::milliseconds(3000));
+//        if(stream->getStreamInfo().UpTime < 2)
+//            throw sdk::Exception("Stream not started with gc source enabled");
+//    }
+//    catch(const sdk::Exception& e){
+//        BOOST_TEST_MESSAGE((std::string) e.what());
+//        BOOST_TEST(((std::string) e.what()).find("Stream not started with gc source enabled") != std::string::npos,
+//                   "Caught unexpected error: " + (std::string) e.what());
+//    }
+//}
+//
+////BOOST_AUTO_TEST_CASE(gst_source){
+////    // TODO - if the above 2 cases works fine, implement same logic here.
+////}
+//BOOST_AUTO_TEST_SUITE_END() // NOLINT input_source
+
 BOOST_AUTO_TEST_SUITE(icd_tests) // NOLINT
 BOOST_AUTO_TEST_CASE(start_defaults) { // NOLINT
         // boost::unit_test::unit_test_log.set_threshold_level(boost::unit_test::log_messages);
@@ -2611,130 +2817,20 @@ BOOST_AUTO_TEST_SUITE_END() // NOLINT icd_tests
 
 
 BOOST_AUTO_TEST_SUITE(icd_tests1) // NOLINT
-BOOST_AUTO_TEST_SUITE(rotate_angle) // NOLINT
-BOOST_AUTO_TEST_CASE(valid_rotate_angle) { // NOLINT
-        try {
-
-            // boost::unit_test::unit_test_log.set_threshold_level(boost::unit_test::log_messages);
-            sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
-            BOOST_TEST_MESSAGE("Valid rotate angle test");
-            BOOST_TEST_MESSAGE("0");
-            std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConfiguration);
-            waitForStreamStarted(stream);
-            sendFrames(stream, 15,
-                       [&stream](uint32_t nFrameId) {
-                           if (nFrameId == 5)
-                               BOOST_TEST(stream->getFullConfiguration().getPreprocessor().getRotateAngle() == 0);
-                       }
-            );
-
-            int angle;
-            for (int i = 1; i < 4; i++) {
-                try {
-
-                    angle = i * 90;
-                    BOOST_TEST_MESSAGE(angle);
-                    startConfiguration = getStartConfiguration();
-                    startConfiguration.getPreprocessor().setRotateAngle(angle);
-                    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-                    stream = mainPipeline->startStream(startConfiguration);
-                    waitForStreamStarted(stream);
-                    sendFrames(stream, 15,
-                               [&stream, angle](uint32_t nFrameId) {
-                                   if (nFrameId == 5)
-                                       BOOST_TEST(stream->getFullConfiguration().getPreprocessor().getRotateAngle() ==
-                                                  angle);
-                               }
-                    );
-//                std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-
-                }
-                catch (sdk::Exception &e) {
-                    BOOST_TEST(((std::string) e.what()).find("not registered") != std::string::npos,
-                               "Caught unexpected error: " + (std::string) e.what());
-                }
-            }
-            stream.reset();
-        }
-        catch (sdk::Exception& e) {
-            BOOST_TEST(((std::string) e.what()).find("not registered") != std::string::npos,
-                       "Caught unexpected error: " + (std::string) e.what());
-        }
+BOOST_AUTO_TEST_SUITE(preprocessor)
+BOOST_AUTO_TEST_CASE(rotate_angle){
+    BOOST_TEST_MESSAGE("Starting preprocessor rotate angle test...");
+    rotateAngleTestFunc(sdk::FlowSwitcherFlowId::Unspecified);
 }
-
-BOOST_AUTO_TEST_SUITE(invalid_rotate_angle) // NOLINT
-    BOOST_AUTO_TEST_CASE(rotate_angle_out_of_range) {
-        BOOST_TEST_MESSAGE("Invalid rotate angle - Out of range test");
-        currentRangeError = rangeError::RotateAngle;
-        errorCounter++;
-        sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
-        try {
-            BOOST_TEST_MESSAGE(startConfiguration.getPreprocessor().minRotateAngle() - 1);
-            startConfiguration.getPreprocessor().setRotateAngle(startConfiguration.getPreprocessor().minRotateAngle() - 1);
-        }
-        catch (sdk::Exception& e) {
-            outOfRangeErrorTest((std::string) e.what());
-        }
-        std::this_thread::sleep_for(std::chrono::milliseconds(2000));
-        errorCounter++;
-        startConfiguration = getStartConfiguration();
-        try {
-            BOOST_TEST_MESSAGE(startConfiguration.getPreprocessor().maxRotateAngle() + 1);
-            startConfiguration.getPreprocessor().setRotateAngle(startConfiguration.getPreprocessor().maxRotateAngle() + 1);
-        }
-        catch (sdk::Exception& e) {
-            outOfRangeErrorTest((std::string) e.what());
-        }
-        BOOST_TEST(errorCounter == 0, "Not all expected errors returned! Number of missed errors: " + std::to_string(errorCounter));
-        currentRangeError = rangeError::NONE;
-    }
-    BOOST_AUTO_TEST_CASE(rotate_angle_unsupported) { // NOLINT
-        std::this_thread::sleep_for(std::chrono::milliseconds(2000));
-        sdk::StartStreamConfiguration startConfiguration; // = getStartConfiguration();
-
-        BOOST_TEST_MESSAGE("Invalid rotate angle - Unsupported test");
-        int angle;
-        for (int i = 0; i < 9; i++) {
-            try {
-                currentStreamError = streamError::RotateAngleUnsupported;
-                currentErrorStr = rotateAngleUnsupported;
-                std::this_thread::sleep_for(std::chrono::milliseconds(2000));
-                angle = (int) (random() % 270) + 1;
-                BOOST_TEST_MESSAGE(angle);
-                startConfiguration = getStartConfiguration();
-                startConfiguration.getPreprocessor().setRotateAngle(angle);
-                std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-                errorCounter++;
-                std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConfiguration);
-                if (angle % 90 == 0) {
-                    currentStreamError = streamError::None;
-                    errorCounter = errorCounter > 0 ? errorCounter - 1 : 0;
-                } else {
-                    waitForStreamStarted(stream);
-                    sendFrames(stream, 10, nullptr);
-                }
-                std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-//                    currentStreamError = streamError::RotateAngleNotInRange;
-            }
-            catch (sdk::Exception &e) {
-                BOOST_TEST(((std::string) e.what()).find("not registered") != std::string::npos,
-                           "Caught unexpected error: " + (std::string) e.what());
-            }
-        }
-        BOOST_TEST(errorCounter == 0, "Not all expected errors returned! Number of missed errors: " + std::to_string(errorCounter));
-}
-BOOST_AUTO_TEST_SUITE_END() // NOLINT invalid_rotate_angle
-BOOST_AUTO_TEST_SUITE_END() // NOLINT rotate_angle
-
-BOOST_AUTO_TEST_CASE(preprocessor_roi){ // no unsupported?
+BOOST_AUTO_TEST_CASE(roi){
     BOOST_TEST_MESSAGE("Starting preprocessor ROI test...");
-    sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
-    currentErrorStr = ROIUnsupported;
-    roiTestFunc<typeof(startConfiguration.getPreprocessor()), size_t>(false, sdk::FlowSwitcherFlowId::Unspecified);
+    roiTestFunc<typeof(sdk::PreprocessorStartStreamConfiguration), size_t>(sdk::FlowSwitcherFlowId::Unspecified);
 }
+BOOST_AUTO_TEST_SUITE_END() // NOLINT preprocessor
 
 
 BOOST_AUTO_TEST_CASE(flow_switcher) { // NOLINT
+        //TODO - decide if create also flow_switcher_test_func
         try {
 
             BOOST_TEST_MESSAGE("Starting flow switcher test...");
@@ -2781,116 +2877,150 @@ BOOST_AUTO_TEST_CASE(flow_switcher) { // NOLINT
 }
 
 BOOST_AUTO_TEST_SUITE(detector) // NOLINT
-BOOST_AUTO_TEST_CASE(detector_roi_start) {  // NOLINT
-        BOOST_TEST_MESSAGE("Starting detector ROI test...");
-        a_strVideoPath = seaMwirVideo;
-        sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
-        roiTestFunc<typeof(startConfiguration.getSeaMwirDetector()), int>(true, sdk::FlowSwitcherFlowId::SeaMwir);
-        std::this_thread::sleep_for(std::chrono::milliseconds(2000));
-
-        a_strVideoPath = groundMwirVideo;
-        startConfiguration = getStartConfiguration();
-        roiTestFunc<typeof(startConfiguration.getGroundMwirDetector()), float>(true, sdk::FlowSwitcherFlowId::GroundMwir);
-        std::this_thread::sleep_for(std::chrono::milliseconds(2000));
-
-        a_strVideoPath = groundRgbVideo;
-        startConfiguration = getStartConfiguration();
-        roiTestFunc<typeof(startConfiguration.getGroundRgbDetector()), double>(true, sdk::FlowSwitcherFlowId::GroundRgb);
-        std::this_thread::sleep_for(std::chrono::milliseconds(2000));
-
-        a_strVideoPath = groundSwirVideo;
-        startConfiguration = getStartConfiguration();
-        roiTestFunc<typeof(startConfiguration.getGroundSwirDetector()), long>(true, sdk::FlowSwitcherFlowId::GroundSwir);
-        std::this_thread::sleep_for(std::chrono::milliseconds(2000));
-
-        a_strVideoPath = seaSwirVideo;
-        startConfiguration = getStartConfiguration();
-        roiTestFunc<typeof(startConfiguration.getSeaSwirDetector()), uint32_t>(true, sdk::FlowSwitcherFlowId::SeaSwir);
-        std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+BOOST_AUTO_TEST_SUITE(detector_roi_start)   // NOLINT
+BOOST_AUTO_TEST_CASE(sea_mwir){
+    BOOST_TEST_MESSAGE("Starting detector ROI test...");
+    a_strVideoPath = seaMwirVideo;
+    roiTestFunc<typeof(sdk::SeaMwirDetectorStartStreamConfiguration), int>(sdk::FlowSwitcherFlowId::SeaMwir);
+    std::this_thread::sleep_for(std::chrono::milliseconds(2000));
 }
 
-BOOST_AUTO_TEST_CASE(detector_roi_update) {  // NOLINT
-        a_strVideoPath = seaMwirVideo;
-        updateRoiTestFunc<typeof(sdk::SeaMwirDetectorUpdateStreamConfiguration), int>(sdk::FlowSwitcherFlowId::SeaMwir);
-
-        a_strVideoPath = groundMwirVideo;
-        updateRoiTestFunc<typeof(sdk::GroundMwirDetectorUpdateStreamConfiguration), float>(sdk::FlowSwitcherFlowId::GroundMwir);
-
-        a_strVideoPath = groundRgbVideo;
-        updateRoiTestFunc<typeof(sdk::GroundRgbDetectorUpdateStreamConfiguration), double>(sdk::FlowSwitcherFlowId::GroundRgb);
-
-        a_strVideoPath = groundSwirVideo;
-        updateRoiTestFunc<typeof(sdk::GroundSwirDetectorUpdateStreamConfiguration), long>(sdk::FlowSwitcherFlowId::GroundSwir);
-
-        a_strVideoPath = seaSwirVideo;
-        updateRoiTestFunc<typeof(sdk::SeaSwirDetectorUpdateStreamConfiguration), uint32_t>(sdk::FlowSwitcherFlowId::SeaSwir);
+BOOST_AUTO_TEST_CASE(ground_mwir){
+    a_strVideoPath = groundMwirVideo;
+    roiTestFunc<typeof(sdk::GroundMwirDetectorStartStreamConfiguration), float>(sdk::FlowSwitcherFlowId::GroundMwir);
+    std::this_thread::sleep_for(std::chrono::milliseconds(2000));
 }
 
-BOOST_AUTO_TEST_CASE(detector_groups) { // NOLINT
-        BOOST_TEST_MESSAGE("Starting detector groups tests...");
-        a_strVideoPath = seaMwirVideo;
-        sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
-        thresholdTestFunc<typeof(startConfiguration.getSeaMwirDetector()), int>(seaGroups, sdk::FlowSwitcherFlowId::SeaMwir);
-        minMaxTestFunc<typeof(startConfiguration.getSeaMwirDetector()), int>(seaGroups, sdk::FlowSwitcherFlowId::SeaMwir);
-
-        a_strVideoPath = groundMwirVideo;
-        startConfiguration = getStartConfiguration();
-        thresholdTestFunc<typeof(startConfiguration.getGroundMwirDetector()), float>(groundGroups, sdk::FlowSwitcherFlowId::GroundMwir);
-        minMaxTestFunc<typeof(startConfiguration.getGroundMwirDetector()), float>(groundGroups, sdk::FlowSwitcherFlowId::GroundMwir);
-
-        a_strVideoPath = groundRgbVideo;
-        startConfiguration = getStartConfiguration();
-        thresholdTestFunc<typeof(startConfiguration.getGroundRgbDetector()), double>(groundGroups, sdk::FlowSwitcherFlowId::GroundRgb);
-        minMaxTestFunc<typeof(startConfiguration.getGroundRgbDetector()), double>(groundGroups, sdk::FlowSwitcherFlowId::GroundRgb);
-
-        a_strVideoPath = groundSwirVideo;
-        startConfiguration = getStartConfiguration();
-        thresholdTestFunc<typeof(startConfiguration.getGroundSwirDetector()), long>(groundGroups, sdk::FlowSwitcherFlowId::GroundSwir);
-        minMaxTestFunc<typeof(startConfiguration.getGroundSwirDetector()), long>(groundGroups, sdk::FlowSwitcherFlowId::GroundSwir);
-
-        a_strVideoPath = seaSwirVideo;
-        startConfiguration = getStartConfiguration();
-        thresholdTestFunc<typeof(startConfiguration.getSeaSwirDetector()), uint32_t>(seaGroups, sdk::FlowSwitcherFlowId::SeaSwir);
-        minMaxTestFunc<typeof(startConfiguration.getSeaSwirDetector()), uint32_t>(seaGroups, sdk::FlowSwitcherFlowId::SeaSwir);
-
+BOOST_AUTO_TEST_CASE(ground_rgb){
+    a_strVideoPath = groundRgbVideo;
+    roiTestFunc<typeof(sdk::GroundRgbDetectorStartStreamConfiguration), double>(sdk::FlowSwitcherFlowId::GroundRgb);
+    std::this_thread::sleep_for(std::chrono::milliseconds(2000));
 }
+
+BOOST_AUTO_TEST_CASE(ground_swir){
+    a_strVideoPath = groundSwirVideo;
+    roiTestFunc<typeof(sdk::GroundSwirDetectorStartStreamConfiguration), long>(sdk::FlowSwitcherFlowId::GroundSwir);
+    std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+}
+
+BOOST_AUTO_TEST_CASE(sea_swir){
+    a_strVideoPath = seaSwirVideo;
+    roiTestFunc<typeof(sdk::SeaSwirDetectorStartStreamConfiguration), uint32_t>(sdk::FlowSwitcherFlowId::SeaSwir);
+    std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+}
+BOOST_AUTO_TEST_SUITE_END() // NOLINT detector_roi_start
+
+
+BOOST_AUTO_TEST_SUITE(detector_roi_update) // NOLINT
+BOOST_AUTO_TEST_CASE(sea_mwir){
+    a_strVideoPath = seaMwirVideo;
+    updateRoiTestFunc<typeof(sdk::SeaMwirDetectorUpdateStreamConfiguration), int>(sdk::FlowSwitcherFlowId::SeaMwir);
+}
+
+BOOST_AUTO_TEST_CASE(ground_mwir){
+    a_strVideoPath = groundMwirVideo;
+    updateRoiTestFunc<typeof(sdk::GroundMwirDetectorUpdateStreamConfiguration), float>(sdk::FlowSwitcherFlowId::GroundMwir);
+}
+
+BOOST_AUTO_TEST_CASE(ground_rgb) {
+    a_strVideoPath = groundRgbVideo;
+    updateRoiTestFunc<typeof(sdk::GroundRgbDetectorUpdateStreamConfiguration), double>(sdk::FlowSwitcherFlowId::GroundRgb);
+}
+
+BOOST_AUTO_TEST_CASE(ground_swir){
+    a_strVideoPath = groundSwirVideo;
+    updateRoiTestFunc<typeof(sdk::GroundSwirDetectorUpdateStreamConfiguration), long>(sdk::FlowSwitcherFlowId::GroundSwir);
+}
+
+BOOST_AUTO_TEST_CASE(sea_swir){
+    a_strVideoPath = seaSwirVideo;
+    updateRoiTestFunc<typeof(sdk::SeaSwirDetectorUpdateStreamConfiguration), uint32_t>(sdk::FlowSwitcherFlowId::SeaSwir);
+}
+BOOST_AUTO_TEST_SUITE_END() // NOLINT detector_roi_update
+
+BOOST_AUTO_TEST_SUITE(detector_groups) // NOLINT
+BOOST_AUTO_TEST_CASE(sea_mwir){
+    BOOST_TEST_MESSAGE("Starting detector groups tests...");
+    a_strVideoPath = seaMwirVideo;
+    sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
+    thresholdTestFunc<typeof(startConfiguration.getSeaMwirDetector()), int>(seaGroups, sdk::FlowSwitcherFlowId::SeaMwir);
+    minMaxTestFunc<typeof(startConfiguration.getSeaMwirDetector()), int>(seaGroups, sdk::FlowSwitcherFlowId::SeaMwir);
+}
+BOOST_AUTO_TEST_CASE(ground_mwir){
+    a_strVideoPath = groundMwirVideo;
+    sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
+    thresholdTestFunc<typeof(startConfiguration.getGroundMwirDetector()), float>(groundGroups, sdk::FlowSwitcherFlowId::GroundMwir);
+    minMaxTestFunc<typeof(startConfiguration.getGroundMwirDetector()), float>(groundGroups, sdk::FlowSwitcherFlowId::GroundMwir);
+}
+
+BOOST_AUTO_TEST_CASE(ground_rgb){
+    a_strVideoPath = groundRgbVideo;
+    sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
+    thresholdTestFunc<typeof(startConfiguration.getGroundRgbDetector()), double>(groundGroups, sdk::FlowSwitcherFlowId::GroundRgb);
+    minMaxTestFunc<typeof(startConfiguration.getGroundRgbDetector()), double>(groundGroups, sdk::FlowSwitcherFlowId::GroundRgb);
+}
+BOOST_AUTO_TEST_CASE(ground_swir){
+    a_strVideoPath = groundSwirVideo;
+    sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
+    thresholdTestFunc<typeof(startConfiguration.getGroundSwirDetector()), long>(groundGroups, sdk::FlowSwitcherFlowId::GroundSwir);
+    minMaxTestFunc<typeof(startConfiguration.getGroundSwirDetector()), long>(groundGroups, sdk::FlowSwitcherFlowId::GroundSwir);
+}
+BOOST_AUTO_TEST_CASE(sea_swir){
+    a_strVideoPath = seaSwirVideo;
+    sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
+    thresholdTestFunc<typeof(startConfiguration.getSeaSwirDetector()), uint32_t>(seaGroups, sdk::FlowSwitcherFlowId::SeaSwir);
+    minMaxTestFunc<typeof(startConfiguration.getSeaSwirDetector()), uint32_t>(seaGroups, sdk::FlowSwitcherFlowId::SeaSwir);
+}
+
+BOOST_AUTO_TEST_SUITE_END() // NOLINT detector_groups
 BOOST_AUTO_TEST_SUITE_END() // NOLINT detector_configuration
 
 BOOST_AUTO_TEST_SUITE(tracker)
-BOOST_AUTO_TEST_CASE(tracker_rate){
+BOOST_AUTO_TEST_SUITE(tracker_rate)
+BOOST_AUTO_TEST_CASE(sea_mwir){
     a_strVideoPath = seaMwirVideo;
     trackerRateTestFunc<typeof(sdk::SeaMwirTrackerRateStartStreamConfiguration), int>(sdk::FlowSwitcherFlowId::SeaMwir);
-
+}
+BOOST_AUTO_TEST_CASE(ground_mwir){
     a_strVideoPath = groundMwirVideo;
     trackerRateTestFunc<typeof(sdk::GroundMwirTrackerRateStartStreamConfiguration), float>(sdk::FlowSwitcherFlowId::GroundMwir);
-
+}
+BOOST_AUTO_TEST_CASE(sea_swir){
     a_strVideoPath = seaSwirVideo;
     trackerRateTestFunc<typeof(sdk::SeaSwirTrackerRateStartStreamConfiguration), uint32_t>(sdk::FlowSwitcherFlowId::SeaSwir);
-
+}
+BOOST_AUTO_TEST_CASE(ground_rgb){
     a_strVideoPath = groundRgbVideo;
     trackerRateTestFunc<typeof(sdk::GroundRgbTrackerRateStartStreamConfiguration), double>(sdk::FlowSwitcherFlowId::GroundRgb);
-
+}
+BOOST_AUTO_TEST_CASE(ground_swir){
     a_strVideoPath = groundSwirVideo;
     trackerRateTestFunc<typeof(sdk::GroundSwirTrackerRateStartStreamConfiguration), long>(sdk::FlowSwitcherFlowId::GroundSwir);
 }
-BOOST_AUTO_TEST_CASE(tracker_configuration){
-//    BOOST_TEST_MESSAGE("Starting tracker test...");
-        a_strVideoPath = seaMwirVideo;
-        trackerTestFunc<typeof(sdk::SeaMwirTrackerStartStreamConfiguration), int>(sdk::FlowSwitcherFlowId::SeaMwir);
+BOOST_AUTO_TEST_SUITE_END() // NOLINT tracker_rate
 
-        a_strVideoPath = groundMwirVideo;
-        trackerTestFunc<typeof(sdk::GroundMwirTrackerStartStreamConfiguration), float>(sdk::FlowSwitcherFlowId::GroundMwir);
-
-        a_strVideoPath = seaSwirVideo;
-        trackerTestFunc<typeof(sdk::SeaSwirTrackerStartStreamConfiguration), uint32_t>(sdk::FlowSwitcherFlowId::SeaSwir);
-
-        a_strVideoPath = groundRgbVideo;
-        trackerTestFunc<typeof(sdk::GroundRgbTrackerStartStreamConfiguration), double>(sdk::FlowSwitcherFlowId::GroundRgb);
-
-        a_strVideoPath = groundSwirVideo;
-        trackerTestFunc<typeof(sdk::GroundSwirTrackerStartStreamConfiguration), long>(sdk::FlowSwitcherFlowId::GroundSwir);
+BOOST_AUTO_TEST_SUITE(tracker_configuration)
+BOOST_AUTO_TEST_CASE(sea_mwir){
+    a_strVideoPath = seaMwirVideo;
+    trackerTestFunc<typeof(sdk::SeaMwirTrackerStartStreamConfiguration), int>(sdk::FlowSwitcherFlowId::SeaMwir);
 }
-
+BOOST_AUTO_TEST_CASE(ground_mwir){
+    a_strVideoPath = groundMwirVideo;
+    trackerTestFunc<typeof(sdk::GroundMwirTrackerStartStreamConfiguration), float>(sdk::FlowSwitcherFlowId::GroundMwir);
+}
+BOOST_AUTO_TEST_CASE(sea_swir){
+    a_strVideoPath = seaSwirVideo;
+    trackerTestFunc<typeof(sdk::SeaSwirTrackerStartStreamConfiguration), uint32_t>(sdk::FlowSwitcherFlowId::SeaSwir);
+}
+BOOST_AUTO_TEST_CASE(ground_rgb){
+   a_strVideoPath = groundRgbVideo;
+   trackerTestFunc<typeof(sdk::GroundRgbTrackerStartStreamConfiguration), double>(sdk::FlowSwitcherFlowId::GroundRgb);
+}
+BOOST_AUTO_TEST_CASE(ground_swir){
+    a_strVideoPath = groundSwirVideo;
+    trackerTestFunc<typeof(sdk::GroundSwirTrackerStartStreamConfiguration), long>(sdk::FlowSwitcherFlowId::GroundSwir);
+}
+BOOST_AUTO_TEST_SUITE_END() // NOLINT tracker_configuration
 BOOST_AUTO_TEST_SUITE_END() // NOLINT tracker
 
 //    BOOST_AUTO_TEST_SUITE(postprocessor) // NOLINT
@@ -2903,7 +3033,11 @@ BOOST_AUTO_TEST_SUITE_END() // NOLINT tracker
 //    BOOST_AUTO_TEST_SUITE_END() // NOLINT
 
 //BOOST_AUTO_TEST_SUITE_END() // NOLINT
+
 //TODO - rangeEstimation and TracksPublisher not implemented
+//BOOST_AUTO_TEST_SUITE(range_estimator)
+//BOOST_AUTO_TEST_SUITE_END() // NOLINT range_estimator
+
 
 BOOST_AUTO_TEST_SUITE(renderer) // NOLINT
 BOOST_AUTO_TEST_CASE(renderer_general) { // NOLINT
@@ -2999,76 +3133,76 @@ BOOST_AUTO_TEST_SUITE_END() // NOLINT renderer
 BOOST_AUTO_TEST_SUITE_END() // NOLINT icd_tests1
 
 BOOST_AUTO_TEST_SUITE(output) //NOLINT
-    BOOST_AUTO_TEST_CASE(full_video) { //NOLINT
-        BOOST_TEST_MESSAGE("Running full videos");
-        try {
+BOOST_AUTO_TEST_SUITE(full_video) //NOLINT
+BOOST_AUTO_TEST_CASE(sea_mwir){
+    BOOST_TEST_MESSAGE("Running full videos");
+    BOOST_TEST_MESSAGE("Sea MWIR");
+    sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
+    a_strVideoPath = seaMwirVideo;
+    std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConfiguration);
+    waitForStreamStarted(stream);
+    sendFrames(stream, -1, nullptr);
+}
 
-            BOOST_TEST_MESSAGE("Sea MWIR");
-            sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
-            a_strVideoPath = seaMwirVideo;
-            std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConfiguration);
-            waitForStreamStarted(stream);
-            sendFrames(stream, -1, nullptr);
+BOOST_AUTO_TEST_CASE(ground_mwir){
+    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+    BOOST_TEST_MESSAGE("Ground MWIR");
+    sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
+    startConfiguration.getFlowSwitcher().setFlowId(sdk::FlowSwitcherFlowId::GroundMwir);
+    a_strVideoPath = groundMwirVideo;
+    std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConfiguration);
+    waitForStreamStarted(stream);
+    sendFrames(stream, -1, nullptr);
+}
+BOOST_AUTO_TEST_CASE(sea_swir){
+    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+    BOOST_TEST_MESSAGE("Sea SWIR");
+    sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
+    startConfiguration.getFlowSwitcher().setFlowId(sdk::FlowSwitcherFlowId::SeaSwir);
+    a_strVideoPath = seaSwirVideo;
+    std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConfiguration);
+    waitForStreamStarted(stream);
+    sendFrames(stream, -1, nullptr);
+}
+BOOST_AUTO_TEST_CASE(ground_rgb){
+    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+    BOOST_TEST_MESSAGE("Ground RGB");
+    sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
+    startConfiguration.getFlowSwitcher().setFlowId(sdk::FlowSwitcherFlowId::GroundRgb);
+    a_strVideoPath = groundRgbVideo;
+    std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConfiguration);
+    waitForStreamStarted(stream);
+    sendFrames(stream, -1, nullptr);
+}
 
-            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-            BOOST_TEST_MESSAGE("Ground MWIR");
-            startConfiguration = getStartConfiguration();
-            startConfiguration.getFlowSwitcher().setFlowId(sdk::FlowSwitcherFlowId::GroundMwir);
-            a_strVideoPath = groundMwirVideo;
-            stream = mainPipeline->startStream(startConfiguration);
-            waitForStreamStarted(stream);
-            sendFrames(stream, -1, nullptr);
+BOOST_AUTO_TEST_CASE(ground_swir){
+    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+    BOOST_TEST_MESSAGE("Ground SWIR");
+    sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
+    a_strVideoPath = groundSwirVideo;
+    std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConfiguration);
+    waitForStreamStarted(stream);
+    sendFrames(stream, -1, nullptr);
+}
+//    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+//    stream.reset();
 
-            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-            BOOST_TEST_MESSAGE("Sea SWIR");
-            startConfiguration = getStartConfiguration();
-            startConfiguration.getFlowSwitcher().setFlowId(sdk::FlowSwitcherFlowId::SeaSwir);
-            a_strVideoPath = seaSwirVideo;
-            stream = mainPipeline->startStream(startConfiguration);
-            waitForStreamStarted(stream);
-            sendFrames(stream, -1, nullptr);
+BOOST_AUTO_TEST_CASE(output_preview) { //NOLINT
+    try {
 
-            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-            BOOST_TEST_MESSAGE("Ground RGB");
-            startConfiguration = getStartConfiguration();
-            startConfiguration.getFlowSwitcher().setFlowId(sdk::FlowSwitcherFlowId::GroundRgb);
-            a_strVideoPath = groundRgbVideo;
-            stream = mainPipeline->startStream(startConfiguration);
-            waitForStreamStarted(stream);
-            sendFrames(stream, -1, nullptr);
-
-            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-            BOOST_TEST_MESSAGE("Ground SWIR");
-            startConfiguration = getStartConfiguration();
-            a_strVideoPath = groundSwirVideo;
-            stream = mainPipeline->startStream(startConfiguration);
-            waitForStreamStarted(stream);
-            sendFrames(stream, -1, nullptr);
-
-            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-            stream.reset();
-        }
-        catch (sdk::Exception& e) {
-            BOOST_TEST(((std::string) e.what()).find("Deadline Exceeded") != std::string::npos,
-                       "Caught unexpected error: " + (std::string) e.what());
-        }
+        sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
+        startConfiguration.getPreviewModule().setEnable(true);
+        currentStreamError = streamError::PreviewError;
+        errorCounter++;
+        std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConfiguration);
+        waitForStreamStarted(stream);
     }
-
-    BOOST_AUTO_TEST_CASE(output_preview) { //NOLINT
-        try {
-
-            sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
-            startConfiguration.getPreviewModule().setEnable(true);
-            currentStreamError = streamError::PreviewError;
-            errorCounter++;
-            std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConfiguration);
-            waitForStreamStarted(stream);
-        }
-        catch (const std::exception &e) {
-            std::cerr << "Error is: " + (std::string) e.what() << std::endl;
-        }
-        BOOST_TEST(errorCounter == 0, "Not all expected errors returned! Number of missed errors: " + std::to_string(errorCounter));
+    catch (const std::exception &e) {
+        std::cerr << "Error is: " + (std::string) e.what() << std::endl;
     }
+    BOOST_TEST(errorCounter == 0, "Not all expected errors returned! Number of missed errors: " + std::to_string(errorCounter));
+}
+BOOST_AUTO_TEST_SUITE_END() // NOLINT full_video
 BOOST_AUTO_TEST_SUITE_END() // NOLINT output
 
 BOOST_AUTO_TEST_SUITE(debug) // NOLINT
@@ -3084,7 +3218,10 @@ BOOST_AUTO_TEST_SUITE(debug) // NOLINT
 
         waitForStreamStarted(stream);
         BOOST_TEST_MESSAGE("Check that SightX logo is in the bottom left corner");
-        sendFrames(stream, 1000, nullptr);
+        sendFrames(stream, -1, [&stream](uint32_t nFrameId){
+            if(nFrameId == 250)
+                BOOST_TEST(stream->getConfiguration().getRenderer().getOsd().getSkipRendering() == true);
+        });
     }
 BOOST_AUTO_TEST_SUITE_END() // NOLINT debug
 
@@ -3155,14 +3292,17 @@ BOOST_AUTO_TEST_CASE(test2){
 
 BOOST_AUTO_TEST_CASE(test3){
     sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
+//    startConfiguration.getGroundMwirDetector().getGroups("person").setScoreThreshold(0.75f);
+//    startConfiguration.getDebugModule().setEnable(true);
+    a_strVideoPath = groundRgbVideo;
+    startConfiguration.getFlowSwitcher().setFlowId(sdk::FlowSwitcherFlowId::GroundRgb);
     std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConfiguration);
+//    std::cout << stream->getId() << std::endl;
     waitForStreamStarted(stream);
 
-    sendFrames(stream, 1000, [&stream](int nFrameId){
-       if(nFrameId == 10) {
-           std::cout << currentFrameDimensions.Width << std::endl;
-           std::cout << currentFrameDimensions.Height << std::endl;
-       }
+    sendFrames(stream, -1, [&stream](uint32_t nFrameId){
+        if(nFrameId % 100 == 0)
+            std::cout << (stream->getStreamInfo().LatencyMs) / 1000 << std::endl;
     });
 }
 
