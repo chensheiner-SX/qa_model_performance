@@ -63,8 +63,7 @@ std::array<std::string, 4> currentDetectedGroups;
 std::map <sdk::FlowSwitcherFlowId, std::string> printDetectorFlow = {
         {sdk::FlowSwitcherFlowId::SeaMwir, "*-*-*-*-*-*-*-* Sea Mwir Detector *-*-*-*-*-*-*-*"},
         {sdk::FlowSwitcherFlowId::SeaSwir, "*-*-*-*-*-*-*-* Sea Swir Detector *-*-*-*-*-*-*-*"},
-        {sdk::FlowSwitcherFlowId::GroundRgb, "*-*-*-*-*-*-*-* Ground Rgb Detector *-*-*-*-*-*-*-*"},
-        {sdk::FlowSwitcherFlowId::GroundSwir, "*-*-*-*-*-*-*-* Ground Swir Detector *-*-*-*-*-*-*-*"},
+        {sdk::FlowSwitcherFlowId::GroundRgbAndSwir, "*-*-*-*-*-*-*-* Ground RgbSwir Detector *-*-*-*-*-*-*-*"},
         {sdk::FlowSwitcherFlowId::GroundMwir, "*-*-*-*-*-*-*-* Ground Mwir Detector *-*-*-*-*-*-*-*"},
         {sdk::FlowSwitcherFlowId::Unspecified, "*-*-*-*-*-*-*-* Preprocessor *-*-*-*-*-*-*-*"}
 };
@@ -72,8 +71,7 @@ std::map <sdk::FlowSwitcherFlowId, std::string> printDetectorFlow = {
 std::map <sdk::FlowSwitcherFlowId, std::string> printTrackerFlow = {
         {sdk::FlowSwitcherFlowId::SeaMwir, "*-*-*-*-*-*-*-* Sea Mwir Tracker *-*-*-*-*-*-*-*"},
         {sdk::FlowSwitcherFlowId::SeaSwir, "*-*-*-*-*-*-*-* Sea Swir Tracker *-*-*-*-*-*-*-*"},
-        {sdk::FlowSwitcherFlowId::GroundRgb, "*-*-*-*-*-*-*-* Ground Rgb Tracker *-*-*-*-*-*-*-*"},
-        {sdk::FlowSwitcherFlowId::GroundSwir, "*-*-*-*-*-*-*-* Ground Swir Detector *-*-*-*-*-*-*-*"},
+        {sdk::FlowSwitcherFlowId::GroundRgbAndSwir, "*-*-*-*-*-*-*-* Ground RgbSwir Tracker *-*-*-*-*-*-*-*"},
         {sdk::FlowSwitcherFlowId::GroundMwir, "*-*-*-*-*-*-*-* Ground Mwir Tracker *-*-*-*-*-*-*-*"},
 };
 
@@ -119,13 +117,13 @@ bool isInRoi(sdk::BoundingBox objLocation) {
         objLocation.X2 <= (currentRoi.X + currentRoi.Width) && objLocation.Y2 <= (currentRoi.Y + currentRoi.Height))
         return true;
 
-    else {
-        std::cout << "Object: [" << objLocation.X1 << "," << objLocation.Y1 << "," << objLocation.X2 << ","
-                  << objLocation.Y2 << "]" << std::endl;
-        std::cout << "ROI: [" << currentRoi.X << "," << currentRoi.Y << "," << currentRoi.X + currentRoi.Width
-                  << "," << currentRoi.Y + currentRoi.Height << std::endl;
-        return false;
-    }
+
+    std::cout << "Object: [" << objLocation.X1 << "," << objLocation.Y1 << "," << objLocation.X2 << ","
+              << objLocation.Y2 << "]" << std::endl;
+    std::cout << "ROI: [" << currentRoi.X << "," << currentRoi.Y << "," << currentRoi.X + currentRoi.Width
+              << "," << currentRoi.Y + currentRoi.Height << std::endl;
+    return false;
+
 
 }
 
@@ -146,7 +144,7 @@ void onFrameResults(const sdk::FrameResults &a_FrameResults, void * /*a_pUserDat
                         if (std::find(seaGroups.begin(), seaGroups.end(), trackClass) != seaGroups.end())
                             threshold = currentStream->getFullConfiguration().getSeaMwirDetector().getGroups(
                                     trackClass).getScoreThreshold();
-                        else { //TODO - make for all the "else" statements something "deeper".. ?
+                        else { //TODO - write "deeper" implementation for all "else" statements..?
                             std::cerr << "Found unsupported group!" << std::endl;
                         }
                         break;
@@ -166,17 +164,20 @@ void onFrameResults(const sdk::FrameResults &a_FrameResults, void * /*a_pUserDat
                             std::cerr << "Found unsupported group!" << std::endl;
                         }
                         break;
-                    case sdk::FlowSwitcherFlowId::GroundRgb:
+                    case sdk::FlowSwitcherFlowId::GroundRgbAndSwir:
                         if (std::find(groundGroups.begin(), groundGroups.end(), trackClass) != groundGroups.end())
-                            threshold = currentStream->getFullConfiguration().getGroundRgbDetector().getGroups(
+                            threshold = currentStream->getFullConfiguration().getGroundRgbSwirDetector().getGroups(
                                     trackClass).getScoreThreshold();
-                    case sdk::FlowSwitcherFlowId::GroundSwir:
-                        if (std::find(groundGroups.begin(), groundGroups.end(), trackClass) != groundGroups.end())
-                            threshold = currentStream->getFullConfiguration().getGroundSwirDetector().getGroups(
-                                    trackClass).getScoreThreshold();
-                        else {
+                        else{
                             std::cerr << "Found unsupported group!" << std::endl;
                         }
+//                    case sdk::FlowSwitcherFlowId::GroundSwir:
+//                        if (std::find(groundGroups.begin(), groundGroups.end(), trackClass) != groundGroups.end())
+//                            threshold = currentStream->getFullConfiguration().getGroundSwirDetector().getGroups(
+//                                    trackClass).getScoreThreshold();
+//                        else {
+//                            std::cerr << "Found unsupported group!" << std::endl;
+//                        }
                         break;
                     default:
                         break;
@@ -373,10 +374,10 @@ namespace std //NOLINT
                 return os << "SeaSwir";
             case sdk::FlowSwitcherFlowId::GroundMwir:
                 return os << "GroundMwir";
-            case sdk::FlowSwitcherFlowId::GroundRgb:
-                return os << "GroundRgb";
-            case sdk::FlowSwitcherFlowId::GroundSwir:
-                return os << "GroundSwir";
+            case sdk::FlowSwitcherFlowId::GroundRgbAndSwir:
+                return os << "GroundRgbSwir";
+//            case sdk::FlowSwitcherFlowId::GroundSwir:
+//                return os << "GroundSwir";
             default:
                 return os << "";
         }
@@ -546,16 +547,16 @@ void waitForStreamStarted(const std::shared_ptr<sdk::Stream> &stream) {
     currentStream = stream;
 }
 
-void waitForStreamStopped(const std::shared_ptr<sdk::Stream>& stream){ // TODO - try and fix this function
-    std::cout << "\nWaiting for stream: " << stream->getId().toString() << " to stop" << std::endl;
-    std::unique_lock<std::mutex> lock(data.Mutex);
-    data.Condition.wait_for(lock, std::chrono::seconds(10), []() { return data.StreamState; });
-    if (!data.StreamState) {
-        std::cerr << "Couldn't start stream for 10 seconds, exiting" << std::endl;
-//        exit(-1);
-        throw std::exception();
-    }
-}
+//void waitForStreamStopped(const std::shared_ptr<sdk::Stream>& stream){ // TODO - try and fix this function
+//    std::cout << "\nWaiting for stream: " << stream->getId().toString() << " to stop" << std::endl;
+//    std::unique_lock<std::mutex> lock(data.Mutex);
+//    data.Condition.wait_for(lock, std::chrono::seconds(10), []() { return data.StreamState; });
+//    if (!data.StreamState) {
+//        std::cerr << "Couldn't start stream for 10 seconds, exiting" << std::endl;
+////        exit(-1);
+//        throw std::exception();
+//    }
+//}
 
 sdk::StartStreamConfiguration getStartConfiguration(const std::string &customSettings = "stream_settings.bin") {
     sdk::StartStreamConfiguration startConfiguration = mainPipeline->createStartStreamConfiguration(customSettings);
@@ -2566,125 +2567,125 @@ BOOST_AUTO_TEST_CASE(start_defaults) { // NOLINT
         BOOST_TEST(startConfiguration.getGroundMwirTracker().getParameters().getMinIouThreshold() == 0.2f);
 
         /*
-         * Ground Rgb Flow ID
+         * Ground RgbSwir Flow ID
          */
-        startConfiguration.getFlowSwitcher().setFlowId(sdk::FlowSwitcherFlowId::GroundRgb);
-        BOOST_TEST_MESSAGE("Starting test - Ground Rgb Flow ID");
-        BOOST_TEST(startConfiguration.getFlowSwitcher().getFlowId() == sdk::FlowSwitcherFlowId::GroundRgb);
+        startConfiguration.getFlowSwitcher().setFlowId(sdk::FlowSwitcherFlowId::GroundRgbAndSwir);
+        BOOST_TEST_MESSAGE("Starting test - Ground RgbSwir Flow ID");
+        BOOST_TEST(startConfiguration.getFlowSwitcher().getFlowId() == sdk::FlowSwitcherFlowId::GroundRgbAndSwir);
 
+//        /*
+//         * Ground Swir Flow ID
+//         */
+//        startConfiguration.getFlowSwitcher().setFlowId(sdk::FlowSwitcherFlowId::GroundSwir);
+//        BOOST_TEST_MESSAGE("Starting test - Ground Swir Flow ID");
+//        BOOST_TEST(startConfiguration.getFlowSwitcher().getFlowId() == sdk::FlowSwitcherFlowId::GroundSwir);
         /*
-         * Ground Swir Flow ID
+         * Ground RgbSwir Detector
          */
-        startConfiguration.getFlowSwitcher().setFlowId(sdk::FlowSwitcherFlowId::GroundSwir);
-        BOOST_TEST_MESSAGE("Starting test - Ground Swir Flow ID");
-        BOOST_TEST(startConfiguration.getFlowSwitcher().getFlowId() == sdk::FlowSwitcherFlowId::GroundSwir);
-        /*
-         * Ground Rgb Detector
-         */
-        BOOST_TEST_MESSAGE("Starting test - Ground Rgb Detector");
-        BOOST_TEST(startConfiguration.getGroundRgbDetector().getRoi().getWidth() == 0);
-        BOOST_TEST(startConfiguration.getGroundRgbDetector().getRoi().getHeight() == 0);
-        BOOST_TEST(startConfiguration.getGroundRgbDetector().getRoi().getX() == 0);
-        BOOST_TEST(startConfiguration.getGroundRgbDetector().getRoi().getY() == 0);
+        BOOST_TEST_MESSAGE("Starting test - Ground RgbSwir Detector");
+        BOOST_TEST(startConfiguration.getGroundRgbSwirDetector().getRoi().getWidth() == 0);
+        BOOST_TEST(startConfiguration.getGroundRgbSwirDetector().getRoi().getHeight() == 0);
+        BOOST_TEST(startConfiguration.getGroundRgbSwirDetector().getRoi().getX() == 0);
+        BOOST_TEST(startConfiguration.getGroundRgbSwirDetector().getRoi().getY() == 0);
         // light-vehicle
-        BOOST_TEST(startConfiguration.getGroundRgbDetector().getGroups("light-vehicle").getScoreThreshold() == 0.3f);
-        BOOST_TEST(startConfiguration.getGroundRgbDetector().getGroups("light-vehicle").getMinWidth() == 0);
-        BOOST_TEST(startConfiguration.getGroundRgbDetector().getGroups("light-vehicle").getMaxWidth() == 1000);
-        BOOST_TEST(startConfiguration.getGroundRgbDetector().getGroups("light-vehicle").getMinHeight() == 0);
-        BOOST_TEST(startConfiguration.getGroundRgbDetector().getGroups("light-vehicle").getMaxHeight() == 1000);
-        BOOST_TEST(startConfiguration.getGroundRgbDetector().getGroups("light-vehicle").getMinAspectRatio() == 0.01f);
-        BOOST_TEST(startConfiguration.getGroundRgbDetector().getGroups("light-vehicle").getMaxAspectRatio() == 1000);
+        BOOST_TEST(startConfiguration.getGroundRgbSwirDetector().getGroups("light-vehicle").getScoreThreshold() == 0.3f);
+        BOOST_TEST(startConfiguration.getGroundRgbSwirDetector().getGroups("light-vehicle").getMinWidth() == 0);
+        BOOST_TEST(startConfiguration.getGroundRgbSwirDetector().getGroups("light-vehicle").getMaxWidth() == 1000);
+        BOOST_TEST(startConfiguration.getGroundRgbSwirDetector().getGroups("light-vehicle").getMinHeight() == 0);
+        BOOST_TEST(startConfiguration.getGroundRgbSwirDetector().getGroups("light-vehicle").getMaxHeight() == 1000);
+        BOOST_TEST(startConfiguration.getGroundRgbSwirDetector().getGroups("light-vehicle").getMinAspectRatio() == 0.01f);
+        BOOST_TEST(startConfiguration.getGroundRgbSwirDetector().getGroups("light-vehicle").getMaxAspectRatio() == 1000);
         // person
-        BOOST_TEST(startConfiguration.getGroundRgbDetector().getGroups("person").getScoreThreshold() == 0.3f);
-        BOOST_TEST(startConfiguration.getGroundRgbDetector().getGroups("person").getMinWidth() == 0);
-        BOOST_TEST(startConfiguration.getGroundRgbDetector().getGroups("person").getMaxWidth() == 1000);
-        BOOST_TEST(startConfiguration.getGroundRgbDetector().getGroups("person").getMinHeight() == 0);
-        BOOST_TEST(startConfiguration.getGroundRgbDetector().getGroups("person").getMaxHeight() == 1000);
-        BOOST_TEST(startConfiguration.getGroundRgbDetector().getGroups("person").getMinAspectRatio() == 0.01f);
-        BOOST_TEST(startConfiguration.getGroundRgbDetector().getGroups("person").getMaxAspectRatio() == 1000);
+        BOOST_TEST(startConfiguration.getGroundRgbSwirDetector().getGroups("person").getScoreThreshold() == 0.3f);
+        BOOST_TEST(startConfiguration.getGroundRgbSwirDetector().getGroups("person").getMinWidth() == 0);
+        BOOST_TEST(startConfiguration.getGroundRgbSwirDetector().getGroups("person").getMaxWidth() == 1000);
+        BOOST_TEST(startConfiguration.getGroundRgbSwirDetector().getGroups("person").getMinHeight() == 0);
+        BOOST_TEST(startConfiguration.getGroundRgbSwirDetector().getGroups("person").getMaxHeight() == 1000);
+        BOOST_TEST(startConfiguration.getGroundRgbSwirDetector().getGroups("person").getMinAspectRatio() == 0.01f);
+        BOOST_TEST(startConfiguration.getGroundRgbSwirDetector().getGroups("person").getMaxAspectRatio() == 1000);
         // two-wheeled
-        BOOST_TEST(startConfiguration.getGroundRgbDetector().getGroups("two-wheeled").getScoreThreshold() == 0.3f);
-        BOOST_TEST(startConfiguration.getGroundRgbDetector().getGroups("two-wheeled").getMinWidth() == 0);
-        BOOST_TEST(startConfiguration.getGroundRgbDetector().getGroups("two-wheeled").getMaxWidth() == 1000);
-        BOOST_TEST(startConfiguration.getGroundRgbDetector().getGroups("two-wheeled").getMinHeight() == 0);
-        BOOST_TEST(startConfiguration.getGroundRgbDetector().getGroups("two-wheeled").getMaxHeight() == 1000);
-        BOOST_TEST(startConfiguration.getGroundRgbDetector().getGroups("two-wheeled").getMinAspectRatio() == 0.01f);
-        BOOST_TEST(startConfiguration.getGroundRgbDetector().getGroups("two-wheeled").getMaxAspectRatio() == 1000);
+        BOOST_TEST(startConfiguration.getGroundRgbSwirDetector().getGroups("two-wheeled").getScoreThreshold() == 0.3f);
+        BOOST_TEST(startConfiguration.getGroundRgbSwirDetector().getGroups("two-wheeled").getMinWidth() == 0);
+        BOOST_TEST(startConfiguration.getGroundRgbSwirDetector().getGroups("two-wheeled").getMaxWidth() == 1000);
+        BOOST_TEST(startConfiguration.getGroundRgbSwirDetector().getGroups("two-wheeled").getMinHeight() == 0);
+        BOOST_TEST(startConfiguration.getGroundRgbSwirDetector().getGroups("two-wheeled").getMaxHeight() == 1000);
+        BOOST_TEST(startConfiguration.getGroundRgbSwirDetector().getGroups("two-wheeled").getMinAspectRatio() == 0.01f);
+        BOOST_TEST(startConfiguration.getGroundRgbSwirDetector().getGroups("two-wheeled").getMaxAspectRatio() == 1000);
         /*
         * Ground Swir Detector
         */
-        BOOST_TEST_MESSAGE("Starting test - Ground Swir Detector");
-        BOOST_TEST(startConfiguration.getGroundSwirDetector().getRoi().getWidth() == 0);
-        BOOST_TEST(startConfiguration.getGroundSwirDetector().getRoi().getHeight() == 0);
-        BOOST_TEST(startConfiguration.getGroundSwirDetector().getRoi().getX() == 0);
-        BOOST_TEST(startConfiguration.getGroundSwirDetector().getRoi().getY() == 0);
-        // light-vehicle
-        BOOST_TEST(startConfiguration.getGroundSwirDetector().getGroups("light-vehicle").getScoreThreshold() == 0.4f);
-        BOOST_TEST(startConfiguration.getGroundSwirDetector().getGroups("light-vehicle").getMinWidth() == 1);
-        BOOST_TEST(startConfiguration.getGroundSwirDetector().getGroups("light-vehicle").getMaxWidth() == 1000);
-        BOOST_TEST(startConfiguration.getGroundSwirDetector().getGroups("light-vehicle").getMinHeight() == 1);
-        BOOST_TEST(startConfiguration.getGroundSwirDetector().getGroups("light-vehicle").getMaxHeight() == 1000);
-        BOOST_TEST(startConfiguration.getGroundSwirDetector().getGroups("light-vehicle").getMinAspectRatio() == 0);
-        BOOST_TEST(startConfiguration.getGroundSwirDetector().getGroups("light-vehicle").getMaxAspectRatio() == 100);
-        // person
-        BOOST_TEST(startConfiguration.getGroundSwirDetector().getGroups("person").getScoreThreshold() == 0.6f);
-        BOOST_TEST(startConfiguration.getGroundSwirDetector().getGroups("person").getMinWidth() == 1);
-        BOOST_TEST(startConfiguration.getGroundSwirDetector().getGroups("person").getMaxWidth() == 1000);
-        BOOST_TEST(startConfiguration.getGroundSwirDetector().getGroups("person").getMinHeight() == 1);
-        BOOST_TEST(startConfiguration.getGroundSwirDetector().getGroups("person").getMaxHeight() == 1000);
-        BOOST_TEST(startConfiguration.getGroundSwirDetector().getGroups("person").getMinAspectRatio() == 0);
-        BOOST_TEST(startConfiguration.getGroundSwirDetector().getGroups("person").getMaxAspectRatio() == 100);
-        // two-wheeled
-        BOOST_TEST(startConfiguration.getGroundSwirDetector().getGroups("two-wheeled").getScoreThreshold() == 0.4f);
-        BOOST_TEST(startConfiguration.getGroundSwirDetector().getGroups("two-wheeled").getMinWidth() == 1);
-        BOOST_TEST(startConfiguration.getGroundSwirDetector().getGroups("two-wheeled").getMaxWidth() == 1000);
-        BOOST_TEST(startConfiguration.getGroundSwirDetector().getGroups("two-wheeled").getMinHeight() == 1);
-        BOOST_TEST(startConfiguration.getGroundSwirDetector().getGroups("two-wheeled").getMaxHeight() == 1000);
-        BOOST_TEST(startConfiguration.getGroundSwirDetector().getGroups("two-wheeled").getMinAspectRatio() == 0);
-        BOOST_TEST(startConfiguration.getGroundSwirDetector().getGroups("two-wheeled").getMaxAspectRatio() == 100);
+//        BOOST_TEST_MESSAGE("Starting test - Ground Swir Detector");
+//        BOOST_TEST(startConfiguration.getGroundSwirDetector().getRoi().getWidth() == 0);
+//        BOOST_TEST(startConfiguration.getGroundSwirDetector().getRoi().getHeight() == 0);
+//        BOOST_TEST(startConfiguration.getGroundSwirDetector().getRoi().getX() == 0);
+//        BOOST_TEST(startConfiguration.getGroundSwirDetector().getRoi().getY() == 0);
+//        // light-vehicle
+//        BOOST_TEST(startConfiguration.getGroundSwirDetector().getGroups("light-vehicle").getScoreThreshold() == 0.4f);
+//        BOOST_TEST(startConfiguration.getGroundSwirDetector().getGroups("light-vehicle").getMinWidth() == 1);
+//        BOOST_TEST(startConfiguration.getGroundSwirDetector().getGroups("light-vehicle").getMaxWidth() == 1000);
+//        BOOST_TEST(startConfiguration.getGroundSwirDetector().getGroups("light-vehicle").getMinHeight() == 1);
+//        BOOST_TEST(startConfiguration.getGroundSwirDetector().getGroups("light-vehicle").getMaxHeight() == 1000);
+//        BOOST_TEST(startConfiguration.getGroundSwirDetector().getGroups("light-vehicle").getMinAspectRatio() == 0);
+//        BOOST_TEST(startConfiguration.getGroundSwirDetector().getGroups("light-vehicle").getMaxAspectRatio() == 100);
+//        // person
+//        BOOST_TEST(startConfiguration.getGroundSwirDetector().getGroups("person").getScoreThreshold() == 0.6f);
+//        BOOST_TEST(startConfiguration.getGroundSwirDetector().getGroups("person").getMinWidth() == 1);
+//        BOOST_TEST(startConfiguration.getGroundSwirDetector().getGroups("person").getMaxWidth() == 1000);
+//        BOOST_TEST(startConfiguration.getGroundSwirDetector().getGroups("person").getMinHeight() == 1);
+//        BOOST_TEST(startConfiguration.getGroundSwirDetector().getGroups("person").getMaxHeight() == 1000);
+//        BOOST_TEST(startConfiguration.getGroundSwirDetector().getGroups("person").getMinAspectRatio() == 0);
+//        BOOST_TEST(startConfiguration.getGroundSwirDetector().getGroups("person").getMaxAspectRatio() == 100);
+//        // two-wheeled
+//        BOOST_TEST(startConfiguration.getGroundSwirDetector().getGroups("two-wheeled").getScoreThreshold() == 0.4f);
+//        BOOST_TEST(startConfiguration.getGroundSwirDetector().getGroups("two-wheeled").getMinWidth() == 1);
+//        BOOST_TEST(startConfiguration.getGroundSwirDetector().getGroups("two-wheeled").getMaxWidth() == 1000);
+//        BOOST_TEST(startConfiguration.getGroundSwirDetector().getGroups("two-wheeled").getMinHeight() == 1);
+//        BOOST_TEST(startConfiguration.getGroundSwirDetector().getGroups("two-wheeled").getMaxHeight() == 1000);
+//        BOOST_TEST(startConfiguration.getGroundSwirDetector().getGroups("two-wheeled").getMinAspectRatio() == 0);
+//        BOOST_TEST(startConfiguration.getGroundSwirDetector().getGroups("two-wheeled").getMaxAspectRatio() == 100);
 
         /*
-         * Ground Rgb Postprocessor
+         * Ground RgbSwir Postprocessor
          */
 
-        BOOST_TEST_MESSAGE("Starting test - Ground Rgb Postprocessor");
-        BOOST_TEST(startConfiguration.getGroundRgbDetector().getOutputClasses(0) == "*");
+        BOOST_TEST_MESSAGE("Starting test - Ground RgbSwir Postprocessor");
+        BOOST_TEST(startConfiguration.getGroundRgbSwirDetector().getOutputClasses(0) == "*");
         /*
          * Ground Swir Postprocessor
          * */
-        BOOST_TEST_MESSAGE("Starting test - Ground Swir Postprocessor");
-        BOOST_TEST(startConfiguration.getGroundSwirDetector().getOutputClasses(0) == "*");
+//        BOOST_TEST_MESSAGE("Starting test - Ground Swir Postprocessor");
+//        BOOST_TEST(startConfiguration.getGroundSwirDetector().getOutputClasses(0) == "*");
 
         /*
-         * Ground Rgb Tracker
+         * Ground RgbSwir Tracker
          */
-        BOOST_TEST_MESSAGE("Starting test - Ground Rgb Tracker");
-        BOOST_TEST(startConfiguration.getGroundRgbTracker().getEnable() == true);
-        BOOST_TEST(startConfiguration.getGroundRgbTracker().getMaxTimeSinceUpdateToReport() == 5);
-        BOOST_TEST(startConfiguration.getGroundRgbTracker().getParameters().getInitTrackSize() == 15);
-        BOOST_TEST(startConfiguration.getGroundRgbTracker().getParameters().getInitThreshold() == 0.4f);
-        BOOST_TEST(startConfiguration.getGroundRgbTracker().getParameters().getInitMetric() == sdk::InitScoreMetric::Median);
-        BOOST_TEST(startConfiguration.getGroundRgbTracker().getParameters().getMaxPredictedFrames() == 30);
-        BOOST_TEST(startConfiguration.getGroundRgbTracker().getParameters().getTrackFeaturesHistorySize() == 1);
-        BOOST_TEST(startConfiguration.getGroundRgbTracker().getParameters().getFeatureWeight() == 0);
-        BOOST_TEST(startConfiguration.getGroundRgbTracker().getParameters().getMaxCosineDistance() == 0.15f);
-        BOOST_TEST(startConfiguration.getGroundRgbTracker().getParameters().getMaxMahalanobisDistance() == 5);
-        BOOST_TEST(startConfiguration.getGroundRgbTracker().getParameters().getMinIouThreshold() == 0.2f);
+        BOOST_TEST_MESSAGE("Starting test - Ground RgbSwir Tracker");
+        BOOST_TEST(startConfiguration.getGroundRgbSwirTracker().getEnable() == true);
+        BOOST_TEST(startConfiguration.getGroundRgbSwirTracker().getMaxTimeSinceUpdateToReport() == 5);
+        BOOST_TEST(startConfiguration.getGroundRgbSwirTracker().getParameters().getInitTrackSize() == 15);
+        BOOST_TEST(startConfiguration.getGroundRgbSwirTracker().getParameters().getInitThreshold() == 0.4f);
+        BOOST_TEST(startConfiguration.getGroundRgbSwirTracker().getParameters().getInitMetric() == sdk::InitScoreMetric::Median);
+        BOOST_TEST(startConfiguration.getGroundRgbSwirTracker().getParameters().getMaxPredictedFrames() == 30);
+        BOOST_TEST(startConfiguration.getGroundRgbSwirTracker().getParameters().getTrackFeaturesHistorySize() == 1);
+        BOOST_TEST(startConfiguration.getGroundRgbSwirTracker().getParameters().getFeatureWeight() == 0);
+        BOOST_TEST(startConfiguration.getGroundRgbSwirTracker().getParameters().getMaxCosineDistance() == 0.15f);
+        BOOST_TEST(startConfiguration.getGroundRgbSwirTracker().getParameters().getMaxMahalanobisDistance() == 5);
+        BOOST_TEST(startConfiguration.getGroundRgbSwirTracker().getParameters().getMinIouThreshold() == 0.2f);
         /*
         * Ground Swir Tracker
         */
-        BOOST_TEST_MESSAGE("Starting test - Ground Swir Tracker");
-        BOOST_TEST(startConfiguration.getGroundSwirTracker().getEnable() == true);
-        BOOST_TEST(startConfiguration.getGroundSwirTracker().getMaxTimeSinceUpdateToReport() == 5);
-        BOOST_TEST(startConfiguration.getGroundSwirTracker().getParameters().getInitTrackSize() == 15);
-        BOOST_TEST(startConfiguration.getGroundSwirTracker().getParameters().getInitThreshold() == 0.4f);
-        BOOST_TEST(startConfiguration.getGroundSwirTracker().getParameters().getInitMetric() == sdk::InitScoreMetric::Median);
-        BOOST_TEST(startConfiguration.getGroundSwirTracker().getParameters().getMaxPredictedFrames() == 30);
-        BOOST_TEST(startConfiguration.getGroundSwirTracker().getParameters().getTrackFeaturesHistorySize() == 1);
-        BOOST_TEST(startConfiguration.getGroundSwirTracker().getParameters().getFeatureWeight() == 0);
-        BOOST_TEST(startConfiguration.getGroundSwirTracker().getParameters().getMaxCosineDistance() == 0.15f);
-        BOOST_TEST(startConfiguration.getGroundSwirTracker().getParameters().getMaxMahalanobisDistance() == 5);
-        BOOST_TEST(startConfiguration.getGroundSwirTracker().getParameters().getMinIouThreshold() == 0.2f);
+//        BOOST_TEST_MESSAGE("Starting test - Ground Swir Tracker");
+//        BOOST_TEST(startConfiguration.getGroundSwirTracker().getEnable() == true);
+//        BOOST_TEST(startConfiguration.getGroundSwirTracker().getMaxTimeSinceUpdateToReport() == 5);
+//        BOOST_TEST(startConfiguration.getGroundSwirTracker().getParameters().getInitTrackSize() == 15);
+//        BOOST_TEST(startConfiguration.getGroundSwirTracker().getParameters().getInitThreshold() == 0.4f);
+//        BOOST_TEST(startConfiguration.getGroundSwirTracker().getParameters().getInitMetric() == sdk::InitScoreMetric::Median);
+//        BOOST_TEST(startConfiguration.getGroundSwirTracker().getParameters().getMaxPredictedFrames() == 30);
+//        BOOST_TEST(startConfiguration.getGroundSwirTracker().getParameters().getTrackFeaturesHistorySize() == 1);
+//        BOOST_TEST(startConfiguration.getGroundSwirTracker().getParameters().getFeatureWeight() == 0);
+//        BOOST_TEST(startConfiguration.getGroundSwirTracker().getParameters().getMaxCosineDistance() == 0.15f);
+//        BOOST_TEST(startConfiguration.getGroundSwirTracker().getParameters().getMaxMahalanobisDistance() == 5);
+//        BOOST_TEST(startConfiguration.getGroundSwirTracker().getParameters().getMinIouThreshold() == 0.2f);
         /*
          * Tracks Publisher
          */
@@ -2785,7 +2786,7 @@ BOOST_AUTO_TEST_CASE(start_defaults) { // NOLINT
          * DebugModule
          */
         BOOST_TEST_MESSAGE("Starting test - DebugModule");
-        BOOST_TEST(startConfiguration.getDebugModule().getEnable() == false);
+//        BOOST_TEST(startConfiguration.getDebugModule().getEnable() == false);
 
         BOOST_TEST_MESSAGE("Starting test - FramerateController configuration");
         BOOST_TEST(startConfiguration.getFramerateController().getOutputFramerate() == 0);
@@ -2799,17 +2800,17 @@ BOOST_AUTO_TEST_CASE(start_defaults) { // NOLINT
         BOOST_TEST_MESSAGE("Starting test - GroundMwirTrackerRate configuration");
         BOOST_TEST(startConfiguration.getGroundMwirTrackerRate().getOutputFramerate() == 0);
 
-        BOOST_TEST_MESSAGE("Starting test - GroundRgbTrackerRate configuration");
-        BOOST_TEST(startConfiguration.getGroundRgbTrackerRate().getOutputFramerate() == 0);
+        BOOST_TEST_MESSAGE("Starting test - GroundRgbSwirTrackerRate configuration");
+        BOOST_TEST(startConfiguration.getGroundRgbSwirTrackerRate().getOutputFramerate() == 0);
 
-        BOOST_TEST_MESSAGE("Starting test - GroundSwirTrackerRate configuration");
-        BOOST_TEST(startConfiguration.getGroundSwirTrackerRate().getOutputFramerate() == 0);
+//        BOOST_TEST_MESSAGE("Starting test - GroundSwirTrackerRate configuration");
+//        BOOST_TEST(startConfiguration.getGroundSwirTrackerRate().getOutputFramerate() == 0);
 
         BOOST_TEST_MESSAGE("Starting test - RangeEstimator");
         BOOST_TEST(startConfiguration.getRangeEstimator().getClasses(0).getClassName() == "person");
         BOOST_TEST(startConfiguration.getRangeEstimator().getClasses(0).getWidthInMeters() == 0);
         BOOST_TEST(startConfiguration.getRangeEstimator().getClasses(0).getHeightInMeters() == 1.8f);
-        BOOST_TEST(startConfiguration.getRangeEstimator().getUseLandmarks() == true);
+//        BOOST_TEST(startConfiguration.getRangeEstimator().getUseLandmarks() == true);
         BOOST_TEST(startConfiguration.getRangeEstimator().getSmoothingFactor() == 0.99f);
 
 }
@@ -2850,9 +2851,9 @@ BOOST_AUTO_TEST_CASE(flow_switcher) { // NOLINT
                                BOOST_TEST(stream->getConfiguration().getFlowSwitcher().getFlowId() == sdk::FlowSwitcherFlowId::GroundMwir);
                            } else if (nFrameId == 20) {
                                BOOST_TEST_MESSAGE(stream->getConfiguration().getFlowSwitcher().getFlowId());
-                               stream->getConfiguration().getFlowSwitcher().setFlowId(sdk::FlowSwitcherFlowId::GroundRgb);
+                               stream->getConfiguration().getFlowSwitcher().setFlowId(sdk::FlowSwitcherFlowId::GroundRgbAndSwir);
                                stream->update();
-                               BOOST_TEST(stream->getConfiguration().getFlowSwitcher().getFlowId() == sdk::FlowSwitcherFlowId::GroundRgb);
+                               BOOST_TEST(stream->getConfiguration().getFlowSwitcher().getFlowId() == sdk::FlowSwitcherFlowId::GroundRgbAndSwir);
                            } else if (nFrameId == 30) {
                                BOOST_TEST_MESSAGE(stream->getConfiguration().getFlowSwitcher().getFlowId());
                                stream->getConfiguration().getFlowSwitcher().setFlowId(sdk::FlowSwitcherFlowId::SeaSwir);
@@ -2891,17 +2892,17 @@ BOOST_AUTO_TEST_CASE(ground_mwir){
     std::this_thread::sleep_for(std::chrono::milliseconds(2000));
 }
 
-BOOST_AUTO_TEST_CASE(ground_rgb){
+BOOST_AUTO_TEST_CASE(ground_rgb_swir){
     a_strVideoPath = groundRgbVideo;
-    roiTestFunc<typeof(sdk::GroundRgbDetectorStartStreamConfiguration), double>(sdk::FlowSwitcherFlowId::GroundRgb);
+    roiTestFunc<typeof(sdk::GroundRgbSwirDetectorStartStreamConfiguration), double>(sdk::FlowSwitcherFlowId::GroundRgbAndSwir);
     std::this_thread::sleep_for(std::chrono::milliseconds(2000));
 }
 
-BOOST_AUTO_TEST_CASE(ground_swir){
-    a_strVideoPath = groundSwirVideo;
-    roiTestFunc<typeof(sdk::GroundSwirDetectorStartStreamConfiguration), long>(sdk::FlowSwitcherFlowId::GroundSwir);
-    std::this_thread::sleep_for(std::chrono::milliseconds(2000));
-}
+//BOOST_AUTO_TEST_CASE(ground_swir){
+//    a_strVideoPath = groundSwirVideo;
+//    roiTestFunc<typeof(sdk::GroundSwirDetectorStartStreamConfiguration), long>(sdk::FlowSwitcherFlowId::GroundSwir);
+//    std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+//}
 
 BOOST_AUTO_TEST_CASE(sea_swir){
     a_strVideoPath = seaSwirVideo;
@@ -2922,15 +2923,15 @@ BOOST_AUTO_TEST_CASE(ground_mwir){
     updateRoiTestFunc<typeof(sdk::GroundMwirDetectorUpdateStreamConfiguration), float>(sdk::FlowSwitcherFlowId::GroundMwir);
 }
 
-BOOST_AUTO_TEST_CASE(ground_rgb) {
+BOOST_AUTO_TEST_CASE(ground_rgb_swir) {
     a_strVideoPath = groundRgbVideo;
-    updateRoiTestFunc<typeof(sdk::GroundRgbDetectorUpdateStreamConfiguration), double>(sdk::FlowSwitcherFlowId::GroundRgb);
+    updateRoiTestFunc<typeof(sdk::GroundRgbSwirDetectorUpdateStreamConfiguration), double>(sdk::FlowSwitcherFlowId::GroundRgbAndSwir);
 }
 
-BOOST_AUTO_TEST_CASE(ground_swir){
-    a_strVideoPath = groundSwirVideo;
-    updateRoiTestFunc<typeof(sdk::GroundSwirDetectorUpdateStreamConfiguration), long>(sdk::FlowSwitcherFlowId::GroundSwir);
-}
+//BOOST_AUTO_TEST_CASE(ground_swir){
+//    a_strVideoPath = groundSwirVideo;
+//    updateRoiTestFunc<typeof(sdk::GroundSwirDetectorUpdateStreamConfiguration), long>(sdk::FlowSwitcherFlowId::GroundSwir);
+//}
 
 BOOST_AUTO_TEST_CASE(sea_swir){
     a_strVideoPath = seaSwirVideo;
@@ -2953,18 +2954,18 @@ BOOST_AUTO_TEST_CASE(ground_mwir){
     minMaxTestFunc<typeof(startConfiguration.getGroundMwirDetector()), float>(groundGroups, sdk::FlowSwitcherFlowId::GroundMwir);
 }
 
-BOOST_AUTO_TEST_CASE(ground_rgb){
+BOOST_AUTO_TEST_CASE(ground_rgb_swir){
     a_strVideoPath = groundRgbVideo;
     sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
-    thresholdTestFunc<typeof(startConfiguration.getGroundRgbDetector()), double>(groundGroups, sdk::FlowSwitcherFlowId::GroundRgb);
-    minMaxTestFunc<typeof(startConfiguration.getGroundRgbDetector()), double>(groundGroups, sdk::FlowSwitcherFlowId::GroundRgb);
+    thresholdTestFunc<typeof(startConfiguration.getGroundRgbSwirDetector()), double>(groundGroups, sdk::FlowSwitcherFlowId::GroundRgbAndSwir);
+    minMaxTestFunc<typeof(startConfiguration.getGroundRgbSwirDetector()), double>(groundGroups, sdk::FlowSwitcherFlowId::GroundRgbAndSwir);
 }
-BOOST_AUTO_TEST_CASE(ground_swir){
-    a_strVideoPath = groundSwirVideo;
-    sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
-    thresholdTestFunc<typeof(startConfiguration.getGroundSwirDetector()), long>(groundGroups, sdk::FlowSwitcherFlowId::GroundSwir);
-    minMaxTestFunc<typeof(startConfiguration.getGroundSwirDetector()), long>(groundGroups, sdk::FlowSwitcherFlowId::GroundSwir);
-}
+//BOOST_AUTO_TEST_CASE(ground_swir){
+//    a_strVideoPath = groundSwirVideo;
+//    sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
+//    thresholdTestFunc<typeof(startConfiguration.getGroundSwirDetector()), long>(groundGroups, sdk::FlowSwitcherFlowId::GroundSwir);
+//    minMaxTestFunc<typeof(startConfiguration.getGroundSwirDetector()), long>(groundGroups, sdk::FlowSwitcherFlowId::GroundSwir);
+//}
 BOOST_AUTO_TEST_CASE(sea_swir){
     a_strVideoPath = seaSwirVideo;
     sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
@@ -2989,14 +2990,14 @@ BOOST_AUTO_TEST_CASE(sea_swir){
     a_strVideoPath = seaSwirVideo;
     trackerRateTestFunc<typeof(sdk::SeaSwirTrackerRateStartStreamConfiguration), uint32_t>(sdk::FlowSwitcherFlowId::SeaSwir);
 }
-BOOST_AUTO_TEST_CASE(ground_rgb){
+BOOST_AUTO_TEST_CASE(ground_rgb_swir){
     a_strVideoPath = groundRgbVideo;
-    trackerRateTestFunc<typeof(sdk::GroundRgbTrackerRateStartStreamConfiguration), double>(sdk::FlowSwitcherFlowId::GroundRgb);
+    trackerRateTestFunc<typeof(sdk::GroundRgbSwirTrackerRateStartStreamConfiguration), double>(sdk::FlowSwitcherFlowId::GroundRgbAndSwir);
 }
-BOOST_AUTO_TEST_CASE(ground_swir){
-    a_strVideoPath = groundSwirVideo;
-    trackerRateTestFunc<typeof(sdk::GroundSwirTrackerRateStartStreamConfiguration), long>(sdk::FlowSwitcherFlowId::GroundSwir);
-}
+//BOOST_AUTO_TEST_CASE(ground_swir){
+//    a_strVideoPath = groundSwirVideo;
+//    trackerRateTestFunc<typeof(sdk::GroundSwirTrackerRateStartStreamConfiguration), long>(sdk::FlowSwitcherFlowId::GroundSwir);
+//}
 BOOST_AUTO_TEST_SUITE_END() // NOLINT tracker_rate
 
 BOOST_AUTO_TEST_SUITE(tracker_configuration)
@@ -3012,14 +3013,14 @@ BOOST_AUTO_TEST_CASE(sea_swir){
     a_strVideoPath = seaSwirVideo;
     trackerTestFunc<typeof(sdk::SeaSwirTrackerStartStreamConfiguration), uint32_t>(sdk::FlowSwitcherFlowId::SeaSwir);
 }
-BOOST_AUTO_TEST_CASE(ground_rgb){
+BOOST_AUTO_TEST_CASE(ground_rgb_swir){
    a_strVideoPath = groundRgbVideo;
-   trackerTestFunc<typeof(sdk::GroundRgbTrackerStartStreamConfiguration), double>(sdk::FlowSwitcherFlowId::GroundRgb);
+   trackerTestFunc<typeof(sdk::GroundRgbSwirTrackerStartStreamConfiguration), double>(sdk::FlowSwitcherFlowId::GroundRgbAndSwir);
 }
-BOOST_AUTO_TEST_CASE(ground_swir){
-    a_strVideoPath = groundSwirVideo;
-    trackerTestFunc<typeof(sdk::GroundSwirTrackerStartStreamConfiguration), long>(sdk::FlowSwitcherFlowId::GroundSwir);
-}
+//BOOST_AUTO_TEST_CASE(ground_swir){
+//    a_strVideoPath = groundSwirVideo;
+//    trackerTestFunc<typeof(sdk::GroundSwirTrackerStartStreamConfiguration), long>(sdk::FlowSwitcherFlowId::GroundSwir);
+//}
 BOOST_AUTO_TEST_SUITE_END() // NOLINT tracker_configuration
 BOOST_AUTO_TEST_SUITE_END() // NOLINT tracker
 
@@ -3164,26 +3165,26 @@ BOOST_AUTO_TEST_CASE(sea_swir){
     waitForStreamStarted(stream);
     sendFrames(stream, -1, nullptr);
 }
-BOOST_AUTO_TEST_CASE(ground_rgb){
+BOOST_AUTO_TEST_CASE(ground_rgb_swir){
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     BOOST_TEST_MESSAGE("Ground RGB");
     sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
-    startConfiguration.getFlowSwitcher().setFlowId(sdk::FlowSwitcherFlowId::GroundRgb);
+    startConfiguration.getFlowSwitcher().setFlowId(sdk::FlowSwitcherFlowId::GroundRgbAndSwir);
     a_strVideoPath = groundRgbVideo;
     std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConfiguration);
     waitForStreamStarted(stream);
     sendFrames(stream, -1, nullptr);
 }
 
-BOOST_AUTO_TEST_CASE(ground_swir){
-    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-    BOOST_TEST_MESSAGE("Ground SWIR");
-    sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
-    a_strVideoPath = groundSwirVideo;
-    std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConfiguration);
-    waitForStreamStarted(stream);
-    sendFrames(stream, -1, nullptr);
-}
+//BOOST_AUTO_TEST_CASE(ground_swir){
+//    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+//    BOOST_TEST_MESSAGE("Ground SWIR");
+//    sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
+//    a_strVideoPath = groundSwirVideo;
+//    std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConfiguration);
+//    waitForStreamStarted(stream);
+//    sendFrames(stream, -1, nullptr);
+//}
 //    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 //    stream.reset();
 
@@ -3235,8 +3236,8 @@ BOOST_AUTO_TEST_CASE(test1){
         a_strVideoPath = video;
         sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
         startConfiguration.getRenderer().getOsd().setSkipRendering(true);
-        startConfiguration.getDebugModule();
-        startConfiguration.getDebugModule().setEnable(true);
+//        startConfiguration.getDebugModule();
+//        startConfiguration.getDebugModule().setEnable(true);
         std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConfiguration);
         waitForStreamStarted(stream);
 
@@ -3295,7 +3296,7 @@ BOOST_AUTO_TEST_CASE(test3){
 //    startConfiguration.getGroundMwirDetector().getGroups("person").setScoreThreshold(0.75f);
 //    startConfiguration.getDebugModule().setEnable(true);
     a_strVideoPath = groundRgbVideo;
-    startConfiguration.getFlowSwitcher().setFlowId(sdk::FlowSwitcherFlowId::GroundRgb);
+    startConfiguration.getFlowSwitcher().setFlowId(sdk::FlowSwitcherFlowId::GroundRgbAndSwir);
     std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConfiguration);
 //    std::cout << stream->getId() << std::endl;
     waitForStreamStarted(stream);
