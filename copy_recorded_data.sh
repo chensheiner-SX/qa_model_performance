@@ -45,14 +45,17 @@ if [ ! -d $DIR ]; then
 fi
 
 
-#Creating ssh public key and copy it to NX
-while true; do
-	ssh-keygen -q -t rsa -N '' <<< $'\ny' >/dev/null 2>&1
-	if [ $? -eq 0 ]; then 
-		ssh_user=$(cat ~/.ssh/id_rsa.pub | tail -1 | awk '{print $3}' | cut -d '@' -f 1)
-		break
-	fi
-done
+#Checking if existing ssh-key and copy them to the NX
+if [ ! -f ~/.ssh/id_rsa.pub ] || [ -z ~/.ssh/id_rsa.pub ] ; then
+	while true; do
+		ssh-keygen -q -t rsa -N '' <<< $'\ny' >/dev/null 2>&1
+		if [ $? -eq 0 ]; then 
+			break
+		fi
+	done
+fi
+
+ssh_user=$(cat ~/.ssh/id_rsa.pub | tail -1 | awk '{print $3}' | cut -d '@' -f 1)
 ssh-copy-id teddybear@$IP &> /dev/null
 
 #getting the recording folder name and checks if its empty	
