@@ -82,6 +82,7 @@ std::string currentErrorStr;
 FrameDimensions currentFrameDimensions;
 Roi currentRoi;
 bool isRoiTest = false;
+bool isArmTest = false;
 std::shared_ptr <sdk::Pipeline> mainPipeline;
 std::shared_ptr <sdk::Stream> currentStream;
 std::map<std::string, bool> runningStreams;
@@ -106,11 +107,11 @@ std::string ROINotInRange;
 std::string ROIUnsupported;
 std::string previewError;
 
-//template<typename T, typename S>
-//std::pair<T, S> getPair(T first, S second) {
-//    return std::pair<T, S>(first, second);
-//}
 
+/// \isInRoi
+/// Checking if detected object is in defined ROI
+/// \param objLocation detected object location
+/// \return is object inside ROI
 bool isInRoi(sdk::BoundingBox objLocation) {
 
     if (objLocation.X1 >= currentRoi.X && objLocation.Y1 >= currentRoi.Y &&
@@ -126,12 +127,30 @@ bool isInRoi(sdk::BoundingBox objLocation) {
 
 
 }
-
+bool isArmed(const sdk::Attribute& attribute){
+    return (attribute.Value == "yes");
+}
 void onMessage(const sdk::MessageLog &a_Log, void * /*a_pUserData*/) {
 //    std::cout << static_cast<uint32_t>(a_Log.Level) << ": " << a_Log.Text.toString() << std::endl;
 }
 
+/// \onFrameResults
+/// Function for checking the enginee's tracks results.
+/// For each frame of the current stream, we are checking the followings: 1. Class threshold result 2. Detected object location compare to defined ROI
+/// \param a_FrameResults Struct containing the track results
+
 void onFrameResults(const sdk::FrameResults &a_FrameResults, void * /*a_pUserData*/) { //TODO - find a way to check detections and not tracks
+//    std::cout << "\rFrame " << a_FrameResults.FrameId << " out of: " << numOfFrames <<
+//                  " [" << a_FrameResults.StreamId.toString() << "]" << std::flush;
+//    for(const sdk::Track& track : a_FrameResults.Tracks.toVector()){
+//        std::cout << "Track id= " + std::to_string(track.TrackId) << std::endl;
+//        std::cout << "Track class= " + track.DetectionData.Class.toString() << std::endl;
+//        std::cout << "Track score= " + std::to_string(track.DetectionData.Score) << std::endl;
+//        for(auto attribute : track.Attributes.toVector()){
+//            std::cout << "Attribute name= " + attribute.Name.toString() << std::endl;
+//            std::cout << "Attribute value= " + attribute.Value.toString() << std::endl;
+//        }
+//    }
     try {
         float threshold = 0;
         std::cout << "\rFrame " << a_FrameResults.FrameId << " out of: " << numOfFrames <<
@@ -175,12 +194,19 @@ void onFrameResults(const sdk::FrameResults &a_FrameResults, void * /*a_pUserDat
                     default:
                         break;
                 }
+//                std::this_thread::sleep_for(std::chrono::milliseconds(10));
                 BOOST_TEST((track.DetectionData.Score >= threshold || track.DetectionData.Score == 0),
                            "Threshold for class " << trackClass << " [" << threshold << "] > Score ["
                                                   << track.DetectionData.Score <<
                                                   "] --> [" << a_FrameResults.StreamId << ", "
                                                   << currentStream->getId().toString() << "]");
                 BOOST_TEST(isInRoi(track.DetectionData.Location));
+                if(isArmTest){
+                    //BOOST_TEST(isArmed(track.Attributes.data()), "Armed person not detected");
+                    for(const auto attribute : track.Attributes.toVector()){
+                        BOOST_TEST(isArmed(attribute), "Armed person not detected");
+                    }
+                }
             }
         }
     }
@@ -191,8 +217,13 @@ void onFrameResults(const sdk::FrameResults &a_FrameResults, void * /*a_pUserDat
 
 }
 
+/// \streamErrorTest
+/// Checking what stream error we get. The options are invalid rotate angle, unsupported ROI or Preview error.
+/// For each streamError we caught, we checking the error string we get and decreasing the error counter
+/// \param errorCaught The error message caught
+/// \param streamId The stream Id
 
-void streamErrorTest(const std::string &errorCaught, const std::string &streamId) {
+void streamErrorTest(const std::string& errorCaught, const std::string &streamId) {
     // If this is not "not registered" and "no data for..."
     if (errorCaught.find("not registered") == std::string::npos
         && errorCaught.find("No data read for 20 seconds, closing stream") == std::string::npos) {
@@ -223,6 +254,10 @@ void streamErrorTest(const std::string &errorCaught, const std::string &streamId
     }
     currentStreamError = streamError::NONE;
 }
+/// \outOfRangeErrorTest
+/// Function verify each call that we get the relevant out-of-range error string.
+/// We decreasing the error counter every call
+/// \param errorMsg The error message caught
 
 void outOfRangeErrorTest(const std::string &errorMsg) {
     std::string rangeStr = "is not in range of";
@@ -300,6 +335,9 @@ void onServerStateChange(sdk::ServerState a_eServerState, void *a_pUserData) {
     pUserData->Condition.notify_one();
 }
 
+
+/// \run
+/// The first function we call in our test cases to configure all necessary settings
 
 void run() {
     boost::unit_test::unit_test_log.set_threshold_level(boost::unit_test::log_messages);
@@ -432,6 +470,9 @@ namespace std //NOLINT
 
 }
 
+/// \SendingSingleFrame
+/// Function we call to send single frame to Meerkat enginee
+/// \param stream The stream we started
 void sendSingleFrame(const std::shared_ptr<sdk::Stream> &stream) {
 
     currentFrameDimensions = {
@@ -458,6 +499,11 @@ void sendSingleFrame(const std::shared_ptr<sdk::Stream> &stream) {
     }
 }
 
+/// \sendFrames
+/// The function we call in order to send sequence of raw frames to Meerkat enginee
+/// \param stream The stream we want send frames to
+/// \param numOfFramesToSend The number of frames we send to the stream
+/// \param func Reference to the function we want to execute during sending frames
 void sendFrames(const std::shared_ptr<sdk::Stream> &stream, size_t numOfFramesToSend,
                 const std::function<void(uint32_t)> &func) {
     numOfFrames = numOfFramesToSend;
@@ -498,7 +544,7 @@ void sendFrames(const std::shared_ptr<sdk::Stream> &stream, size_t numOfFramesTo
                         mat.rows,
                         sdk::PixelFormat::BGR8, // supported pixel formats are defined in Types.h
                         mat.step[0],
-                        nFrameId++, // can be default (-1) to use frame ids aulior.lakayatically generated by the engine
+                        nFrameId++, // can be default (-1) to use frame ids automatically generated by the engine
                         -1);        // timestamp in ms, if -1 current time is used
 
                 std::this_thread::sleep_for(
@@ -521,20 +567,15 @@ void sendFrames(const std::shared_ptr<sdk::Stream> &stream, size_t numOfFramesTo
     }
 }
 
+/// \waitForStreamStarted
+/// Function that stop our program process until stream starting
+/// \param stream The stream we waiting to
 void waitForStreamStarted(const std::shared_ptr<sdk::Stream> &stream) {
-//    try {
-//        if (currentStream != nullptr) {
-//            currentStream.reset();
-//            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-//        }
-//    }
-//    catch(...) {std::cout << "Here" << std::endl;}
     std::cout << "\nWaiting for stream: " << stream->getId().toString() << std::endl;
     std::unique_lock<std::mutex> lock(data.Mutex);
     data.Condition.wait_for(lock, std::chrono::seconds(10), []() { return data.StreamState; });
     if (!data.StreamState) {
         std::cerr << "Couldn't start stream for 10 seconds, exiting" << std::endl;
-//        exit(-1);
         throw std::exception();
     }
     currentStream = stream;
@@ -551,15 +592,21 @@ void waitForStreamStarted(const std::shared_ptr<sdk::Stream> &stream) {
 //    }
 //}
 
-sdk::StartStreamConfiguration getStartConfiguration(const std::string &cuslior.lakaySettings = "stream_settings.bin") {
-    sdk::StartStreamConfiguration startConfiguration = mainPipeline->createStartStreamConfiguration(cuslior.lakaySettings);
+/// \getStartConfiguration
+/// Returns start stream configurations
+/// \param customSettings stream configurations, default values assigned if not sent customized settings
+/// \return Start stream configurations
+sdk::StartStreamConfiguration getStartConfiguration(const std::string &customSettings = "stream_settings.bin") {
+    sdk::StartStreamConfiguration startConfiguration = mainPipeline->createStartStreamConfiguration(customSettings);
     startConfiguration.getRawSource();
     startConfiguration.getRawSource().setReadTimeoutInSec(-1); // TODO(NOTE) - it was 20;
     startConfiguration.getGstSink().setUrl(sinkStr);
     return startConfiguration;
 }
 
-
+/// \rotateAngleTestFunc
+/// Test function for rotate angle mechanism
+/// \param flowId The flow id we working with
 void rotateAngleTestFunc(sdk::FlowSwitcherFlowId flowId){
     std::cout << printDetectorFlow[flowId] << std::endl;
     sdk::StartStreamConfiguration startConfiguration;
@@ -665,6 +712,10 @@ void rotateAngleTestFunc(sdk::FlowSwitcherFlowId flowId){
     }
     BOOST_TEST(errorCounter == 0, "Not all expected errors returned! Number of missed errors: " + std::to_string(errorCounter));
 }
+
+/// \roiTestFunc
+/// Test function for start stream ROI settings
+/// \param flowId The flow id we working with
 template<typename CONF, typename T>
 void roiTestFunc(sdk::FlowSwitcherFlowId flowId) {
 
@@ -876,7 +927,6 @@ void roiTestFunc(sdk::FlowSwitcherFlowId flowId) {
         conf = getDetectorConfiguration(startConfiguration, (T) 1.0);
         conf.getRoi().setY(100);
         conf.getRoi().setHeight((uint32_t)(100 + currentFrameDimensions.Height));
-        conf.getRoi().setWidth(1);
         errorCounter++;
         std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConfiguration);
         waitForStreamStarted(stream);
@@ -931,6 +981,9 @@ void roiTestFunc(sdk::FlowSwitcherFlowId flowId) {
     isRoiTest = false;
 }
 
+/// \updateRoiTestFunc
+/// Test function for updating stream ROI settings
+/// \param flowId The flow id we working with
 template<typename CONF, typename T>
 void updateRoiTestFunc(sdk::FlowSwitcherFlowId flowId) {
     std::cout << printDetectorFlow[flowId] << std::endl;
@@ -1197,6 +1250,10 @@ void updateRoiTestFunc(sdk::FlowSwitcherFlowId flowId) {
     isRoiTest = false;
 }
 
+/// \thresholdTestFunc
+/// Test function for start and update stream threshold settings;
+/// \param flowId The flow id we working with
+/// \param groups Array of group names according to flow id we working with
 template<typename CONF, typename T>
 void thresholdTestFunc(const std::array<std::string, 4> &groups, sdk::FlowSwitcherFlowId flowId) {
     std::cout << printDetectorFlow[flowId] << std::endl;
@@ -1262,7 +1319,7 @@ void thresholdTestFunc(const std::array<std::string, 4> &groups, sdk::FlowSwitch
                        [&stream, &conf, &group](uint32_t nFrameId) {
                            float threshold = (float) ((random() % 91) + 10) / 100;
                            if (nFrameId == 50) {
-                               BOOST_TEST_MESSAGE(threshold);
+                               BOOST_TEST_MESSAGE("\n" << threshold);
                                conf.getGroups(group).setScoreThreshold(threshold);
                                stream->update();
                                currentStream = stream;
@@ -1270,7 +1327,7 @@ void thresholdTestFunc(const std::array<std::string, 4> &groups, sdk::FlowSwitch
                                std::this_thread::sleep_for(std::chrono::milliseconds(2000));
                            } else if (nFrameId == 100) {
                                threshold = (float) ((random() % 91) + 10) / 100;
-                               BOOST_TEST_MESSAGE(threshold);
+                               BOOST_TEST_MESSAGE("\n" << threshold);
                                conf.getGroups(group).setScoreThreshold(threshold);
                                stream->update();
                                currentStream = stream;
@@ -1278,7 +1335,7 @@ void thresholdTestFunc(const std::array<std::string, 4> &groups, sdk::FlowSwitch
                                std::this_thread::sleep_for(std::chrono::milliseconds(2000));
                            } else if (nFrameId == 150) {
                                threshold = (float) ((random() % 91) + 10) / 100;
-                               BOOST_TEST_MESSAGE(threshold);
+                               BOOST_TEST_MESSAGE("\n" << threshold);
                                conf.getGroups(group).setScoreThreshold(threshold);
                                stream->update();
                                currentStream = stream;
@@ -1286,7 +1343,7 @@ void thresholdTestFunc(const std::array<std::string, 4> &groups, sdk::FlowSwitch
                                std::this_thread::sleep_for(std::chrono::milliseconds(2000));
                            } else if (nFrameId == 200) {
                                threshold = (float) ((random() % 91) + 10) / 100;
-                               BOOST_TEST_MESSAGE(threshold);
+                               BOOST_TEST_MESSAGE("\n" << threshold);
                                conf.getGroups(group).setScoreThreshold(threshold);
                                stream->update();
                                currentStream = stream;
@@ -1294,7 +1351,7 @@ void thresholdTestFunc(const std::array<std::string, 4> &groups, sdk::FlowSwitch
                                std::this_thread::sleep_for(std::chrono::milliseconds(2000));
                            } else if (nFrameId == 250){
                                threshold = (float) ((random() % 91) + 10) / 100;
-                               BOOST_TEST_MESSAGE(threshold);
+                               BOOST_TEST_MESSAGE("\n" << threshold);
                                conf.getGroups(group).setScoreThreshold(threshold);
                                stream->update();
                                currentStream = stream;
@@ -1302,7 +1359,7 @@ void thresholdTestFunc(const std::array<std::string, 4> &groups, sdk::FlowSwitch
                                std::this_thread::sleep_for(std::chrono::milliseconds(2000));
                            } else if (nFrameId == 300) {
                                threshold = (float) ((random() % 91) + 10) / 100;
-                               BOOST_TEST_MESSAGE(threshold);
+                               BOOST_TEST_MESSAGE("\n" << threshold);
                                conf.getGroups(group).setScoreThreshold(threshold);
                                stream->update();
                                currentStream = stream;
@@ -1310,7 +1367,7 @@ void thresholdTestFunc(const std::array<std::string, 4> &groups, sdk::FlowSwitch
                                std::this_thread::sleep_for(std::chrono::milliseconds(2000));
                            } else if (nFrameId == 400) {
                                threshold = (float) ((random() % 91) + 10) / 100;
-                               BOOST_TEST_MESSAGE(threshold);
+                               BOOST_TEST_MESSAGE("\n" << threshold);
                                conf.getGroups(group).setScoreThreshold(threshold);
                                stream->update();
                                currentStream = stream;
@@ -1344,6 +1401,10 @@ void thresholdTestFunc(const std::array<std::string, 4> &groups, sdk::FlowSwitch
     }
 }
 
+/// \minMaxTestFunc
+/// Test function for all detector's min-max values
+/// \param flowId The flow id we working with
+/// \param groups Array of group names according to flow id we working with
 template<typename CONF, typename T>
 void minMaxTestFunc(const std::array<std::string, 4>& groups, sdk::FlowSwitcherFlowId flowId){
     std::cout << printDetectorFlow[flowId] << std::endl;
@@ -1548,6 +1609,9 @@ void minMaxTestFunc(const std::array<std::string, 4>& groups, sdk::FlowSwitcherF
     }
 }
 
+/// \trackerRateTestFunc
+/// Test function for tracker's output frame rate
+/// \param flowId The flow id we working with
 template<typename CONF, typename T>
 void trackerRateTestFunc(sdk::FlowSwitcherFlowId flowId){
     std::cout << printTrackerFlow[flowId] << std::endl;
@@ -1665,6 +1729,9 @@ void trackerRateTestFunc(sdk::FlowSwitcherFlowId flowId){
     BOOST_TEST(errorCounter == 0, "Not all expected errors returned! Number of missed errors: " + std::to_string(errorCounter));
 }
 
+/// \trackerTestFunc
+/// Test function for general tracker's settings
+/// \param flowId The flow id we working with
 template<typename CONF, typename T>
 void trackerTestFunc(sdk::FlowSwitcherFlowId flowId){
     std::cout << printTrackerFlow[flowId] << std::endl;
@@ -1936,8 +2003,9 @@ void trackerTestFunc(sdk::FlowSwitcherFlowId flowId){
     BOOST_TEST(errorCounter == 0, "Not all expected errors returned! Number of missed errors: " + std::to_string(errorCounter));
 }
 
-
-void rendererTestFunc(/*const sdk::FlowSwitcherFlowId flowId*/){
+/// \rendererTestFunc
+/// Test function for renderer settings
+void rendererTestFunc(){
     sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
     errorCounter = 0;
     BOOST_TEST_MESSAGE("Starting Out of range tests...");
@@ -2259,107 +2327,16 @@ void rendererTestFunc(/*const sdk::FlowSwitcherFlowId flowId*/){
     BOOST_TEST(errorCounter == 0, "Not all expected errors returned! Number of missed errors: " + std::to_string(errorCounter));
 }
 
-template<typename CONF, typename T>
-void postprocessorTestFunc(const std::array<std::string, 4> &groups) {
-    BOOST_TEST_MESSAGE("Postprocessor test");
-    sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
-//    CONF conf = getPostprocessorConfiguration(startConfiguration, (T) 1.0);
 
-}
 
 BOOST_AUTO_TEST_CASE(run_tests) { // NOLINT
         run();
 }
 
-//BOOST_AUTO_TEST_SUITE(input_source) // NOLINT
-//BOOST_AUTO_TEST_CASE(no_input){
-//    try{
-//        sdk::StartStreamConfiguration startConfiguration = mainPipeline->createStartStreamConfiguration("stream_settings.bin");
-//        std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConfiguration);
-//        waitForStreamStarted(stream);
-//    }
-//    catch(const sdk::Exception& e){
-//        std::cout << (std::string) e.what() << std::endl; // TODO - check what exception message we get and use boost test
-//    }
-//}
-//BOOST_AUTO_TEST_CASE(raw_source){
-//    try {
-//        sdk::StartStreamConfiguration startConfiguration = mainPipeline->createStartStreamConfiguration("stream_settings.bin");
-//        startConfiguration.getRawSource();
-//
-//        BOOST_TEST(startConfiguration.getRawSource().getMode() == sdk::RawSourceMode::Stream);
-//        BOOST_TEST(startConfiguration.getRawSource().getReadTimeoutInSec() == 5);
-//        BOOST_TEST(startConfiguration.getRawSource().getSingleFrameTimeoutInSec() == 3);
-//        BOOST_TEST(startConfiguration.getRawSource().getPort() == 0);
-//
-//        startConfiguration.getRawSource().setReadTimeoutInSec(0);
-//        std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConfiguration);
-//        waitForStreamStarted(stream);
-//        std::this_thread::sleep_for(std::chrono::milliseconds(3000));
-//        if(stream->getStreamInfo().UpTime < 2)
-//            throw sdk::Exception("Stream not started with raw source enabled");
-//    }
-//    catch(const sdk::Exception& e){
-//        BOOST_TEST_MESSAGE((std::string) e.what());
-//    }
-//}
-//
-//BOOST_AUTO_TEST_CASE(gc_source){
-//    try {
-//        sdk::StartStreamConfiguration startConfiguration = mainPipeline->createStartStreamConfiguration("stream_settings.bin");
-//        startConfiguration.getGcSource();
-//
-//        BOOST_TEST(startConfiguration.getGcSource().getTimeoutInSec() == 10);
-//        BOOST_TEST(startConfiguration.getGcSource().getUrl() == "");
-//        BOOST_TEST(startConfiguration.getGcSource().getDeviceAccessMode() == sdk::DeviceAccess::Control);
-//
-//        startConfiguration.getRawSource().setReadTimeoutInSec(0);
-//        std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConfiguration);
-//        waitForStreamStarted(stream);
-//        std::this_thread::sleep_for(std::chrono::milliseconds(3000));
-//        if(stream->getStreamInfo().UpTime < 2)
-//            throw sdk::Exception("Stream not started with gc source enabled");
-//    }
-//    catch(const sdk::Exception& e){
-//        BOOST_TEST_MESSAGE((std::string) e.what());
-//        BOOST_TEST(((std::string) e.what()).find("Stream not started with gc source enabled") != std::string::npos,
-//                   "Caught unexpected error: " + (std::string) e.what());
-//    }
-//}
-//
-////BOOST_AUTO_TEST_CASE(gst_source){
-////    // TODO - if the above 2 cases works fine, implement same logic here.
-////}
-//BOOST_AUTO_TEST_SUITE_END() // NOLINT input_source
 
 BOOST_AUTO_TEST_SUITE(icd_tests) // NOLINT
 BOOST_AUTO_TEST_CASE(start_defaults) { // NOLINT
-        // boost::unit_test::unit_test_log.set_threshold_level(boost::unit_test::log_messages);
-        //    run();
         sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
-        /*
-         * Raw Source
-         */
-        //    BOOST_TEST_MESSAGE("Starting test - Raw Source");
-        //    BOOST_TEST(startConfiguration.getRawSource().getMode() == sdk::RawSourceMode::Stream);
-        //    BOOST_TEST(startConfiguration.getRawSource().getReadTimeoutInSec() == 5);
-        //    BOOST_TEST(startConfiguration.getRawSource().getPort() == 0);
-        //
-        //    /*
-        //     * Gc Source
-        //     */
-        //    BOOST_TEST_MESSAGE("Starting test - Gc Source");
-        //    BOOST_TEST(startConfiguration.getGcSource().getTimeoutInSec() == 10);
-        //    BOOST_TEST(startConfiguration.getGcSource().getUrl() == "");
-        //    BOOST_TEST(startConfiguration.getGcSource().getDeviceAccessMode() == sdk::DeviceAccess::Control);
-        //    BOOST_TEST(startConfiguration.getGcSource().sizeGcParameters() == 0);
-        //
-        //    /*
-        //     * Gst Source
-        //     */
-        //    BOOST_TEST_MESSAGE("Starting test - Gst Source");
-        //    BOOST_TEST(startConfiguration.getGstSource().getSource().toString() == "rtspsrc location={}");
-        //    BOOST_TEST(startConfiguration.getGstSource().getUrl() == "");
 
         /*
          * Preprocessor
@@ -2520,7 +2497,7 @@ BOOST_AUTO_TEST_CASE(start_defaults) { // NOLINT
         BOOST_TEST(startConfiguration.getGroundMwirDetector().getRoi().getX() == 0);
         BOOST_TEST(startConfiguration.getGroundMwirDetector().getRoi().getY() == 0);
         // light-vehicle
-        BOOST_TEST(startConfiguration.getGroundMwirDetector().getGroups("light-vehicle").getScoreThreshold() == 0.3f);
+        BOOST_TEST(startConfiguration.getGroundMwirDetector().getGroups("light-vehicle").getScoreThreshold() == 0.4f);
         BOOST_TEST(startConfiguration.getGroundMwirDetector().getGroups("light-vehicle").getMinWidth() == 1);
         BOOST_TEST(startConfiguration.getGroundMwirDetector().getGroups("light-vehicle").getMaxWidth() == 1000);
         BOOST_TEST(startConfiguration.getGroundMwirDetector().getGroups("light-vehicle").getMinHeight() == 1);
@@ -2528,7 +2505,7 @@ BOOST_AUTO_TEST_CASE(start_defaults) { // NOLINT
         BOOST_TEST(startConfiguration.getGroundMwirDetector().getGroups("light-vehicle").getMinAspectRatio() == 0);
         BOOST_TEST(startConfiguration.getGroundMwirDetector().getGroups("light-vehicle").getMaxAspectRatio() == 100);
         // person
-        BOOST_TEST(startConfiguration.getGroundMwirDetector().getGroups("person").getScoreThreshold() == 0.3f);
+        BOOST_TEST(startConfiguration.getGroundMwirDetector().getGroups("person").getScoreThreshold() == 0.6f);
         BOOST_TEST(startConfiguration.getGroundMwirDetector().getGroups("person").getMinWidth() == 1);
         BOOST_TEST(startConfiguration.getGroundMwirDetector().getGroups("person").getMaxWidth() == 1000);
         BOOST_TEST(startConfiguration.getGroundMwirDetector().getGroups("person").getMinHeight() == 1);
@@ -2536,7 +2513,7 @@ BOOST_AUTO_TEST_CASE(start_defaults) { // NOLINT
         BOOST_TEST(startConfiguration.getGroundMwirDetector().getGroups("person").getMinAspectRatio() == 0);
         BOOST_TEST(startConfiguration.getGroundMwirDetector().getGroups("person").getMaxAspectRatio() == 100);
         // two-wheeled
-        BOOST_TEST(startConfiguration.getGroundMwirDetector().getGroups("two-wheeled").getScoreThreshold() == 0.3f);
+        BOOST_TEST(startConfiguration.getGroundMwirDetector().getGroups("two-wheeled").getScoreThreshold() == 0.4f);
         BOOST_TEST(startConfiguration.getGroundMwirDetector().getGroups("two-wheeled").getMinWidth() == 1);
         BOOST_TEST(startConfiguration.getGroundMwirDetector().getGroups("two-wheeled").getMaxWidth() == 1000);
         BOOST_TEST(startConfiguration.getGroundMwirDetector().getGroups("two-wheeled").getMinHeight() == 1);
@@ -2756,7 +2733,7 @@ BOOST_AUTO_TEST_CASE(start_defaults) { // NOLINT
         BOOST_TEST(startConfiguration.getRenderer().getOsd().getFontThickness() == 1);
         // Histogram
         BOOST_TEST(startConfiguration.getRenderer().getHistogram().getSkipRendering() == true);
-        BOOST_TEST(startConfiguration.getRenderer().getHistogram().getCorner() == sdk::Corner::Botlior.lakayLeft);
+        BOOST_TEST(startConfiguration.getRenderer().getHistogram().getCorner() == sdk::Corner::BottomLeft);
         BOOST_TEST(startConfiguration.getRenderer().getHistogram().getMarginX() == 10);
         BOOST_TEST(startConfiguration.getRenderer().getHistogram().getMarginY() == 10);
         BOOST_TEST(startConfiguration.getRenderer().getHistogram().getBins() == 100);
@@ -3198,7 +3175,7 @@ BOOST_AUTO_TEST_CASE(output_preview) { //NOLINT
         std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConfiguration);
         waitForStreamStarted(stream);
     }
-    catch (const std::exception &e) {
+    catch (const sdk::Exception &e) {
         std::cerr << "Error is: " + (std::string) e.what() << std::endl;
     }
     BOOST_TEST(errorCounter == 0, "Not all expected errors returned! Number of missed errors: " + std::to_string(errorCounter));
@@ -3218,7 +3195,7 @@ BOOST_AUTO_TEST_SUITE(debug) // NOLINT
         std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConfiguration);
 
         waitForStreamStarted(stream);
-        BOOST_TEST_MESSAGE("Check that SightX logo is in the botlior.lakay left corner");
+        BOOST_TEST_MESSAGE("Check that SightX logo is in the bottom left corner");
         sendFrames(stream, -1, [&stream](uint32_t nFrameId){
             if(nFrameId == 250)
                 BOOST_TEST(stream->getConfiguration().getRenderer().getOsd().getSkipRendering() == true);
@@ -3226,87 +3203,118 @@ BOOST_AUTO_TEST_SUITE(debug) // NOLINT
     }
 BOOST_AUTO_TEST_SUITE_END() // NOLINT debug
 
-BOOST_AUTO_TEST_CASE(test1){
+//BOOST_AUTO_TEST_CASE(test1){
+//
+//    std::vector<std::string> videos = {
+//            "/home/lior.lakay/Desktop/sdk_runner/test_videos/Ground_MWIR/groundMWIR1",
+//            "home/tom/Desktop/sdk_runner/test_videos/Ground_MWIR/groundMWIR2"
+//    };
+//    for (std::string video : videos) {
+//        a_strVideoPath = video;
+//        sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
+//        startConfiguration.getRenderer().getOsd().setSkipRendering(true);
+////        startConfiguration.getDebugModule();
+////        startConfiguration.getDebugModule().setEnable(true);
+//        std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConfiguration);
+//        waitForStreamStarted(stream);
+//
+//        sendFrames(stream, 1000, nullptr);
+//
+//
+//    }
+//}
 
-    std::vector<std::string> videos = {
-            "/home/lior.lakay/Desktop/sdk_runner/test_videos/Ground_MWIR/groundMWIR1",
-            "home/lior.lakay/Desktop/sdk_runner/test_videos/Ground_MWIR/groundMWIR2"
-    };
-    for (std::string video : videos) {
-        a_strVideoPath = video;
-        sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
-        startConfiguration.getRenderer().getOsd().setSkipRendering(true);
-//        startConfiguration.getDebugModule();
-//        startConfiguration.getDebugModule().setEnable(true);
-        std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConfiguration);
-        waitForStreamStarted(stream);
-
-        sendFrames(stream, 1000, nullptr);
-
-
-    }
-}
-
-BOOST_AUTO_TEST_CASE(test){
-    try {
-        a_strVideoPath = groundMwirVideo;
-        sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
-        startConfiguration.getFlowSwitcher().setFlowId(sdk::FlowSwitcherFlowId::GroundMwir);
-        startConfiguration.getGroundMwirDetector().getRoi().setWidth(700);
-//        startConfiguration.getGroundMwirDetector().getRoi().setHeight(700);
-        std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConfiguration);
-        waitForStreamStarted(stream);
-//        std::cout << stream->getConfiguration().getGroundMwirDetector().getRoi().getWidth() << std::endl;
-        sendFrames(stream, 1000, [&stream](int nFrameId){
-            if(nFrameId == 70)
-                std::cout << stream->getConfiguration().getGroundMwirDetector().getRoi().getWidth() << std::endl;
-        });
-//        std::cout << stream->getConfiguration().getGroundMwirDetector().getRoi().getWidth() << std::endl;
-    }
-    catch(const sdk::Exception& e){
-        std::cerr << e.what() << std::endl;
-    }
-}
-
-BOOST_AUTO_TEST_CASE(test2){
-    try {
-        a_strVideoPath = groundMwirVideo;
-        sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
-        startConfiguration.getPreprocessor().getRoi().setWidth(641);
-//        startConfiguration.getPreprocessor().getRoi().setHeight(1);
-        startConfiguration.getFlowSwitcher().setFlowId(sdk::FlowSwitcherFlowId::GroundMwir);
+//BOOST_AUTO_TEST_CASE(test){
+//    try {
+//        a_strVideoPath = groundMwirVideo;
+//        sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
+//        startConfiguration.getFlowSwitcher().setFlowId(sdk::FlowSwitcherFlowId::GroundMwir);
 //        startConfiguration.getGroundMwirDetector().getRoi().setWidth(700);
-//        startConfiguration.getGroundMwirDetector().getRoi().setHeight(700);
-        std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConfiguration);
+////        startConfiguration.getGroundMwirDetector().getRoi().setHeight(700);
+//        std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConfiguration);
+//        waitForStreamStarted(stream);
+////        std::cout << stream->getConfiguration().getGroundMwirDetector().getRoi().getWidth() << std::endl;
+//        sendFrames(stream, 1000, [&stream](int nFrameId){
+//            if(nFrameId == 70)
+//                std::cout << stream->getConfiguration().getGroundMwirDetector().getRoi().getWidth() << std::endl;
+//        });
+////        std::cout << stream->getConfiguration().getGroundMwirDetector().getRoi().getWidth() << std::endl;
+//    }
+//    catch(const sdk::Exception& e){
+//        std::cerr << e.what() << std::endl;
+//    }
+//}
+
+//BOOST_AUTO_TEST_CASE(test2){
+//    try {
+//        a_strVideoPath = groundMwirVideo;
+//        sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
+//        startConfiguration.getPreprocessor().getRoi().setWidth(641);
+////        startConfiguration.getPreprocessor().getRoi().setHeight(1);
+//        startConfiguration.getFlowSwitcher().setFlowId(sdk::FlowSwitcherFlowId::GroundMwir);
+////        startConfiguration.getGroundMwirDetector().getRoi().setWidth(700);
+////        startConfiguration.getGroundMwirDetector().getRoi().setHeight(700);
+//        std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConfiguration);
+//        waitForStreamStarted(stream);
+////        std::cout << stream->getConfiguration().getGroundMwirDetector().getRoi().getWidth() << std::endl;
+//        sendFrames(stream, 1000, [&stream](int nFrameId){
+//            if(nFrameId == 70)
+//                BOOST_TEST_MESSAGE(stream->getConfiguration().getGroundMwirDetector().getRoi().getWidth());
+//        });
+////        std::cout << stream->getConfiguration().getGroundMwirDetector().getRoi().getWidth() << std::endl;
+//    }
+//    catch(const sdk::Exception& e){
+//        std::cerr << e.what() << std::endl;
+//    }
+//}
+
+//BOOST_AUTO_TEST_CASE(test3){
+//    sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
+////    startConfiguration.getGroundMwirDetector().getGroups("person").setScoreThreshold(0.75f);
+////    startConfiguration.getDebugModule().setEnable(true);
+//    a_strVideoPath = groundRgbVideo;
+//    startConfiguration.getFlowSwitcher().setFlowId(sdk::FlowSwitcherFlowId::GroundRgbAndSwir);
+//    std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConfiguration);
+////    std::cout << stream->getId() << std::endl;
+//    waitForStreamStarted(stream);
+//
+//    sendFrames(stream, -1, [&stream](uint32_t nFrameId){
+//        if(nFrameId % 100 == 0)
+//            std::cout << (stream->getStreamInfo().LatencyMs) / 1000 << std::endl;
+//    });
+//}
+
+BOOST_AUTO_TEST_CASE(test_arm){
+    try {
+        sdk::StartStreamConfiguration startConf = getStartConfiguration();
+        startConf.getFlowSwitcher().setFlowId(sdk::FlowSwitcherFlowId::GroundRgbAndSwir);
+        groundRgbVideo = "/home/lior.lakay/Desktop/sdk_runner/test_videos/Armed/DJI_20221026160239_0001_W.mp4";
+        isArmTest = true;
+        a_strVideoPath = groundRgbVideo;
+        std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConf);
         waitForStreamStarted(stream);
-//        std::cout << stream->getConfiguration().getGroundMwirDetector().getRoi().getWidth() << std::endl;
-        sendFrames(stream, 1000, [&stream](int nFrameId){
-            if(nFrameId == 70)
-                BOOST_TEST_MESSAGE(stream->getConfiguration().getGroundMwirDetector().getRoi().getWidth());
-        });
-//        std::cout << stream->getConfiguration().getGroundMwirDetector().getRoi().getWidth() << std::endl;
+        sendFrames(stream, -1, nullptr);
     }
-    catch(const sdk::Exception& e){
-        std::cerr << e.what() << std::endl;
+    catch(sdk::Exception& e){
+        std::cerr << "Exception= " + (std::string)e.what() << std::endl;
     }
 }
 
-BOOST_AUTO_TEST_CASE(test3){
-    sdk::StartStreamConfiguration startConfiguration = getStartConfiguration();
-//    startConfiguration.getGroundMwirDetector().getGroups("person").setScoreThreshold(0.75f);
-//    startConfiguration.getDebugModule().setEnable(true);
-    a_strVideoPath = groundRgbVideo;
-    startConfiguration.getFlowSwitcher().setFlowId(sdk::FlowSwitcherFlowId::GroundRgbAndSwir);
-    std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConfiguration);
-//    std::cout << stream->getId() << std::endl;
-    waitForStreamStarted(stream);
-
-    sendFrames(stream, -1, [&stream](uint32_t nFrameId){
-        if(nFrameId % 100 == 0)
-            std::cout << (stream->getStreamInfo().LatencyMs) / 1000 << std::endl;
-    });
+BOOST_AUTO_TEST_CASE(testing_pipester){
+    try {
+        sdk::StartStreamConfiguration startConf = getStartConfiguration();
+        startConf.getFlowSwitcher().setFlowId(sdk::FlowSwitcherFlowId::GroundRgbAndSwir);
+        groundRgbVideo = "/home/lior.lakay/Desktop/sdk_runner/test_videos/Ground_RGB/ground_rgb_test_set.avi";
+//        isArmTest = true;
+        a_strVideoPath = groundRgbVideo;
+        std::shared_ptr<sdk::Stream> stream = mainPipeline->startStream(startConf);
+        waitForStreamStarted(stream);
+        sendFrames(stream, -1, nullptr);
+    }
+    catch(sdk::Exception& e){
+        std::cerr << "Exception= " + (std::string)e.what() << std::endl;
+    }
 }
-
 BOOST_AUTO_TEST_CASE(destroy) { // NOLINT
         mainPipeline.reset();
 }
