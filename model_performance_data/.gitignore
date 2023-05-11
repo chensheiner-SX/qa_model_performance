@@ -1,0 +1,9 @@
+single_frame/.idea
+single_frame/build
+single_frame/achiya_build
+single_frame/cmake-build-debug
+iou_packed_test/
+frame_results/
+data/
+csvs/
+results/
