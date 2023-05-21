@@ -5,13 +5,14 @@ import csv
 import argparse
 from utils.find_boxes_distance import get_closest_distance
 from utils.merge_frames import zero_padding, combine_frames, get_extension
-from IOU.utils.db_client import DB_Client
-from IOU.utils.s3_client import S3_Client
-from IOU.config import settings as opt
+from utils.db_client import DB_Client
+from utils.s3_client import S3_Client
+from config import settings as opt
 from tqdm import tqdm
 import pandas as pd
 import numpy as np
-#TODO chen change paths to new name
+
+# TODO chen change paths to new name
 Detection = namedtuple("Detection", ["image_path", "gt", "pred"])
 
 
@@ -21,6 +22,7 @@ def parse_args():
     parser.add_argument('--video_context_id', required=False)
     parser.add_argument('--nx_ip', required=False)
     parser.add_argument("--flow_id", required=False)
+    parser.add_argument("--create_video", required=False)
     return parser.parse_args()
 
 
@@ -69,6 +71,10 @@ def clean_data_gt(gt, db_client):
     subclass_df = get_subclass_codes(db_client)
     gt['class_name'] = gt.class_code.apply(lambda x: class_df[x])
     gt['subclass_name'] = gt.subclass_code.apply(lambda x: subclass_df[x])
+    gt=gt.drop_duplicates(subset=["frame_id","object_id"])
+    gt=gt.reset_index()
+    gt.drop(columns=["index","class_code","subclass_code"], inplace=True)
+    gt.index.names = ['index']
     return gt
 
 
@@ -83,7 +89,7 @@ def get_data(video_id):
             dwh.allegro_videos.context_id,
             dwh.objects.video_gk, 
             dwh.videos.source_path,
-            dwh.objects.shape_code
+            dwh.objects.object_id
             
             FROM ((dwh.allegro_videos
             
@@ -97,16 +103,16 @@ def get_data(video_id):
 
     # limit 100
 
-    query_gt = query.replace("video_context_id", video_id)
     if not os.path.exists(f"{os.getcwd()}/data/{video_id}.csv"):
         print("Getting GT data from Database")
+        query_gt = query.replace("video_context_id", video_id)
 
         data_gt = db_client.sql_query_db(query_gt)
         assert not data_gt.empty, f"No GT file in Database of name: {video_id}"
         data_gt = clean_data_gt(data_gt, db_client)
         data_gt.to_csv(f"{os.getcwd()}/data/{video_id}.csv")
     else:
-        print("GT csv already exist")
+        print("GT CSV Already Exist")
         data_gt = pd.read_csv(f"{os.getcwd()}/data/{video_id}.csv")
     return data_gt
 
@@ -150,7 +156,7 @@ def generate_detections_csv(ip, video_path, flow_id, output_csv_path):
             f"single_frame/./sdk_sample_single_frame {ip} {video_path} {flow_id} {output_csv_path}")
         assert os.path.isfile(output_csv_path), "Detection CSV creation failed"
     else:
-        print("detections csv already exist")
+        print("Detections CSV Already Exist")
 
 
 def get_box_from_detection_csv(urls):
@@ -201,9 +207,69 @@ def bb_iou_score(boxA, boxB, epsilon=1e-5):
     roi2[boxB[1]:boxB[3], boxB[0]:boxB[2]] = 1
 
     iou, union_area, intersection = calc_iou(roi1, roi2)
-    return iou,intersection
+    return iou, intersection
 
 
+def match_detection_gt(gt_boxes, det_boxes):
+    ordered_detections = pd.DataFrame().reindex_like(det_boxes)
+    if "index" not in gt_boxes:
+        gt_boxes.index.names = ['index']
+        gt_boxes=gt_boxes.reset_index()
+
+
+    results = define_new_columns(gt_boxes)
+
+
+    break_flag = False
+    det_boxes.reset_index(inplace=True)
+    for frame_id in tqdm(gt_boxes.frame_id.unique(),desc="Matching GT to Detections:"):
+        for i, gt_box in gt_boxes[gt_boxes.frame_id == frame_id].iterrows():
+            best_iou = 0
+            for j, det_box in det_boxes[det_boxes.framdId == frame_id].iterrows():
+                if not det_boxes[det_boxes.framdId == frame_id].empty:
+                    iou, _ = bb_iou_score(gt_box[["x1", "y1", "x2", "y2"]], det_box[["x1", "y1", "x2", "y2"]])
+                    if iou > best_iou:
+                        results.loc[
+                            results["index"] == gt_box["index"], ["det_class", "det_x1", "det_y1", "det_x2",
+                                                                            "det_y2", "iou"]] = [
+                            *det_box[["class", "x1", "y1", "x2", "y2"]].values, iou]
+                        break_flag = True
+                        break
+            if break_flag:
+                det_boxes = det_boxes.drop(det_box["index"])
+                break_flag = False
+
+    FN = results.iloc[results[results['iou'].isnull()].index]
+    results = results.drop(results[results['iou'].isnull()].index)
+    results = results.astype({"det_x1": "int", "det_y1": "int", "det_x2": "int", "det_y2": "int", "iou": "float"})
+    return results, det_boxes,FN
+
+def match_detection_gt_by_distance(gt_boxes, det_boxes):
+    ordered_detections = pd.DataFrame().reindex_like(det_boxes)
+    results = define_new_columns(gt_boxes)
+    break_flag = False
+    det_boxes.reset_index(inplace=True)
+    for frame_id in gt_boxes.frame_id.unique():
+        for i, gt_box in gt_boxes[gt_boxes.frame_id == frame_id].iterrows():
+            best_iou = 0
+            for j, det_box in det_boxes[det_boxes.framdId == frame_id].iterrows():
+                if not det_boxes[det_boxes.framdId == frame_id].empty:
+                    iou, _ = bb_iou_score(gt_box[["x1", "y1", "x2", "y2"]], det_box[["x1", "y1", "x2", "y2"]])
+                    if iou > best_iou:
+                        results.loc[
+                            results["Unnamed: 0"] == gt_box["Unnamed: 0"], ["det_class", "det_x1", "det_y1", "det_x2",
+                                                                            "det_y2", "iou"]] = [
+                            *det_box[["class", "x1", "y1", "x2", "y2"]].values, iou]
+                        break_flag = True
+                        break
+            if break_flag:
+                det_boxes = det_boxes.drop(det_box["index"])
+                break_flag = False
+
+    FN = results.iloc[results[results['iou'].isnull()].index]
+    results = results.drop(results[results['iou'].isnull()].index)
+    results = results.astype({"det_x1": "int", "det_y1": "int", "det_x2": "int", "det_y2": "int", "iou": "float"})
+    return results, det_boxes,FN
 # def clean_gt_boxes(gt_boxes):
 #     for key in list(gt_boxes.keys()):
 #         objects_list = gt_boxes[key]
@@ -214,337 +280,24 @@ def bb_iou_score(boxA, boxB, epsilon=1e-5):
 #     return gt_boxes
 
 
-def get_num_of_objects(gt_boxes):
-    total_objects = 0
-    total_frames = len(gt_boxes.keys())
-    for key in list(gt_boxes.keys()):
-        objects_list = gt_boxes[key]
-        total_objects += len(objects_list)
 
-    return total_objects / total_frames
-
-
-def get_object_size(gt_boxes):
-    results = {'vehicle': [], 'person': [], 'two-wheeled': []}
-    v_total_width = v_total_height = 0
-    p_total_width = p_total_height = 0
-    t_total_width = t_total_height = 0
-    vehicle_count = person_count = two_wheeled_count = 0
-
-    for key in list(gt_boxes.keys()):
-        objects_list = gt_boxes.get(key)
-        for obj in objects_list:
-            if obj[0] == "vehicle":
-                vehicle_count += 1
-                object_width = obj[3] - obj[1]
-                object_height = obj[4] - obj[2]
-                results["vehicle"].append((object_width, object_height))
-            elif obj[0] == "person":
-                person_count += 1
-                object_width = obj[3] - obj[1]
-                object_height = obj[4] - obj[2]
-                results["person"].append((object_width, object_height))
-            elif obj[0] == "two-wheeled":
-                two_wheeled_count += 1
-                object_width = obj[3] - obj[1]
-                object_height = obj[4] - obj[2]
-                results["two-wheeled"].append((object_width, object_height))
-
-    for v_width, v_height in results["vehicle"]:
-        v_total_width += v_width
-        v_total_height += v_height
-
-    for p_width, p_height in results["person"]:
-        p_total_width += p_width
-        p_total_height += p_height
-
-    for t_width, t_height in results["two-wheeled"]:
-        t_total_width += t_width
-        t_total_height += t_height
-
-    result_list = []
-    try:
-        p_avg_width = p_total_width / person_count
-        p_avg_height = p_total_height / person_count
-        result_list.append((p_avg_width, p_avg_height))
-    except ZeroDivisionError:
-        result_list.append((0, 0))
-    try:
-        v_avg_widht = v_total_width / vehicle_count
-        v_avg_height = v_total_height / vehicle_count
-        result_list.append((v_avg_widht, v_avg_height))
-    except ZeroDivisionError:
-        result_list.append((0, 0))
-    try:
-        t_avg_widht = t_total_width / two_wheeled_count
-        t_avg_height = t_total_height / two_wheeled_count
-        result_list.append((t_avg_widht, t_avg_height))
-    except ZeroDivisionError:
-        result_list.append((0, 0))
-
-    return result_list
-
-
-def get_distance_between_objects(gt_boxes):
-    return None
-    # TODO: finish implement this func
-    distances = set()
-    for frame in gt_boxes.keys():
-        boxes = gt_boxes[frame]
-        for index, box in enumerate(boxes):
-            curr_box_x1 = float(box[1])
-            curr_box_y1 = float(box[2])
-            for other_box in range(index + 1, len(boxes)):
-                other_box_x1 = float(box[1])
-                other_box_y1 = float(box[2])
-                print(other_box_x1, curr_box_x1)
-                x1_distance = (curr_box_x1 - other_box_x1)
-                y1_distance = abs(curr_box_y1 - other_box_y1)
-                print(x1_distance, y1_distance)
-                distances.add((x1_distance, y1_distance))
-    print(distances)
-
-
-def number_objects(data):
-    data["object_id"] = 0
-    object_counter = 0
-    last_id = 0
-    for indx in data.index:
-        if data.loc[indx, "frame_id"] != last_id:
-            object_counter = 0
-            last_id = data.loc[indx, "frame_id"]
-            data.loc[indx, "object_id"] = object_counter
-            object_counter += 1
-        else:
-            data.loc[indx, "object_id"] = object_counter
-            object_counter += 1
-    return data
 
 
 def define_new_columns(data):
-    data["frame_shape_w"] = None
-    data["frame_shape_h"] = None
-    data["gt_bb_w"] = None
-    data["gt_bb_h"] = None
-    data["det_class"] = None
-    data["det_subclass"] = None
-    data["det_coor"] = None
-    data["det_score"] = None
-    data["det_bb_w"] = None
-    data["det_bb_h"] = None
-    data["iou"] = None
+
+    # data["gt_bb_w"] = None # TODO to be added
+    # data["gt_bb_h"] = None # TODO to be added
+    data.loc[:, "det_class"] = None
+    data.loc[:, "det_subclass"] = None
+    data.loc[:, "det_x1"] = None
+    data.loc[:, "det_y1"] = None
+    data.loc[:, "det_x2"] = None
+    data.loc[:, "det_y2"] = None
+    data.loc[:, "det_score"] = None  # TODO to be added
+    # data["det_bb_w"] = None # TODO to be added
+    # data["det_bb_h"] = None # TODO to be added
+    data.loc[:, "iou"] = None
     return data
-
-
-def main():
-    indexes_to_delete = set()
-    FP_counter = FN_counter = TP_counter = 0
-
-    # getting the ground-truth boxes from csv, the format is {frame_id: [(class,x1,y1,x2,y2), ... ] }
-    gt_boxes, frames_urls = get_box_from_gt_csv()
-
-    # getting rid of "dilemma_zone" annotations
-    gt_boxes = clean_gt_boxes(gt_boxes)
-
-    # getting the detection boxes from csv, the format is {frame_id: [(class,x1,y1,x2,y2), ... ] }
-    detect_boxes, frames_folder = get_box_from_detection_csv(frames_urls)
-
-    gt_boxes = number_objects(gt_boxes)
-    results = define_new_columns(gt_boxes)
-    # bb_iou_score(gt_boxes.loc[:, ["x1", "y1", "x2", "y2"]], detect_boxes.loc[:, ["x1", "y1", "x2", "y2"]]) #TODO chen define pairs of GT and detecs using intersection. and save to dataframe
-    # in order to save result video
-    vid_fps = 20.0
-    frame = os.listdir(frames_folder)[0]
-    frame_width = int(cv2.imread(f"{frames_folder}{frame}").shape[1])
-    frame_height = int(cv2.imread(f"{frames_folder}{frame}").shape[0])
-    out = cv2.VideoWriter(f'results/{opt.video_context_id}_video.avi', cv2.VideoWriter_fourcc('M', 'J', 'P', 'G'),
-                          vid_fps,
-                          (frame_width, frame_height))
-
-    # frame_num = int(next(iter(detect_boxes.keys())))  # getting the first frame number (it can be 0 or 1)
-    results = pd.DataFrame(
-        columns=["video_name", "video_id", "frame_id", "frame_shape_w", "frame_shape_h", "url", "gt_class", "gt_coor",
-                 "gt_bb_w", "gt_bb_h", "det_class", "det_subclass", "det_coor", "det_score", "det_bb_w", "det_bb_h"])
-
-    line_data = [opt.video_context_id, ]
-
-    with open(f"results/{opt.video_context_id}_report.csv", "a") as results_file:
-        # Checking whetere the result file exist
-        if not os.path.exists(f"{os.getcwd()}/results/{opt.video_context_id}_report.csv"):
-            results_file.write(
-                "Recall,Precision,PD,FAR,obj_type,obj_width,obj_height,obj_type,obj_width,obj_height,obj_type,obj_width,obj_height\n")
-        # Read until video is completed
-        for frame in os.listdir(frames_folder):
-            frame = cv2.imread(f"{frames_folder}{frame}")
-            # Capture frame-by-frame
-            # ret, frame = cap.read()
-            # if ret == True:
-            # Saving the gt and detections results for frame_num
-            detection_result = detect_boxes.get(str(frame_num))
-            gt_result = gt_boxes.get(str(frame_num))
-
-            # Case 1:
-            # No gt frame_num but there's detection frame_num
-            # i.e. |gt_csv_frames| < |detection_csv_frames|
-            if gt_result is None and detection_result is not None:
-                if detection_result != -1:
-                    FP_counter += len(detection_result)
-                frame_num += 1
-                continue
-
-            # Case 2:
-            # No gt frame_num and no detection frame_num
-            elif gt_result is None and detection_result is None:
-                frame_num += 1
-                continue
-
-            # Case 3:
-            # There's gt frame_num but no detection frame_num
-            elif gt_result is not None and detection_result is None:
-                if len(gt_result):
-                    FN_counter += len(gt_result)
-                frame_num += 1
-                continue
-            # Case 4:
-            # There's gt frame_num and there's detection frame_num
-            elif gt_result is not None and detection_result is not None:
-                if detection_result == -1:
-                    FN_counter += len(gt_result)
-                    frame_num += 1
-                    continue
-
-            # Iterating through all gt boxes
-            for gt_box in gt_result:
-                # Getting the closest prediction box from all prediction boxes list
-                index = get_closest_distance(gt_box, detection_result)
-                detect_relevant_box = detection_result[index]
-
-                # Adding the prediction box we used to the set
-                indexes_to_delete.add(index)
-
-                # Change numeric coordinates values of each box from str to float
-                detect_relevant_box = (
-                    detect_relevant_box[0],  # Class
-                    float(detect_relevant_box[1]),  # X1
-                    float(detect_relevant_box[2]),  # Y1
-                    float(detect_relevant_box[3]),  # X2
-                    float(detect_relevant_box[4])  # Y2
-                )
-
-                gt_box = (
-                    gt_box[0],  # Class
-                    float(gt_box[1]),  # X1
-                    float(gt_box[2]),  # Y1
-                    float(gt_box[3]),  # X2
-                    float(gt_box[4])  # Y2
-                )
-
-                # Calculating the iou score
-                iou_score = bb_iou_score(
-                    (
-                        detect_relevant_box[1], detect_relevant_box[2], detect_relevant_box[3],
-                        detect_relevant_box[4]),
-                    (gt_box[1], gt_box[2], gt_box[3], gt_box[4])
-                )
-
-                detection_class = detect_relevant_box[0]
-                gt_class = gt_box[0]
-
-                # Checking that prediction class and gt class is different
-                # TODO: consider "eye examination" for more accurate results
-                if (detection_class).find(gt_class) == -1:
-                    if iou_score < 0.25:
-                        FN_counter += 1
-                    else:
-                        FP_counter += 1
-
-                # Otherwise is the same class for both gt and prediction
-                else:
-                    if iou_score == 0:
-                        FN_counter += 1
-                    elif 0 < iou_score <= 0.4:
-                        FP_counter += 1
-                    else:
-                        TP_counter += 1
-
-                # Drawing on the frame the followings:
-                # * gt_box with green color
-                # * detection_box with red color
-                # * iou score
-                #
-                # Note: We are using int values because cv2.rectangle()
-                #       doesn't know to work with float values
-                detect_start_point = (int(detect_relevant_box[1]), int(detect_relevant_box[2]))
-                detect_end_point = (int(detect_relevant_box[3]), int(detect_relevant_box[4]))
-                gt_start_point = (int(gt_box[1]), int(gt_box[2]))
-                gt_end_point = (int(gt_box[3]), int(gt_box[4]))
-
-                cv2.rectangle(frame, gt_start_point, gt_end_point, (0, 255, 0), 2)
-
-                cv2.rectangle(frame, detect_start_point, detect_end_point, (0, 0, 255), 2)
-
-                cv2.putText(frame, "IoU: {:.2f}".format(iou_score),
-                            (int(detect_relevant_box[1]) - 20, int(detect_relevant_box[2]) - 20),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0),
-                            2)  # drawing IOU score per image
-
-            # Deleting all prediction boxes we used from the list
-            for indx in reversed(list(indexes_to_delete)):
-                try:
-                    del detection_result[indx]
-                except Exception:
-                    print(f"Exception when trying to delete detection index")
-
-            indexes_to_delete.clear()
-
-            # TODO: uncomment/comment this line in order to see/not see the engine FP during the video
-            for detect_box in detection_result:
-                detect_start_point = (int(float(detect_box[1])), int(float(detect_box[2])))
-                detect_end_point = (int(float(detect_box[3])), int(float(detect_box[4])))
-                cv2.rectangle(frame, detect_start_point, detect_end_point, (0, 0, 255), 2)
-
-            # Displaying the frame with the results
-            # cv2.imshow('Frame', frame)
-            out.write(frame)
-
-            # Press Q on keyboard to exit
-            # if cv2.waitKey(25) & 0xFF == ord('q'):
-            #     break
-
-            frame_num += 1
-
-        # All unused prediction boxes considered as FP
-        for key in list(detect_boxes.keys()):
-            if detect_boxes[key] != -1 and len(detect_boxes[key]):
-                FP_counter += len(detect_boxes[key])
-
-        Recall = TP_counter / (TP_counter + FP_counter)
-        Precision = TP_counter / (TP_counter + FP_counter)
-        PD = TP_counter / (TP_counter + FN_counter)
-        FAR = FP_counter / (TP_counter + FP_counter)
-
-        # The objects avg width and height
-        person_avg = objects_sizes[0]
-        vehicle_avg = objects_sizes[1]
-        two_wheeled_avg = objects_sizes[2]
-
-        # Writing all insights to the output report
-        results_file.write(
-            f"{str(Recall)},{str(Precision)},{str(PD)},{str(FAR)},vehicle,{str(vehicle_avg[0])},{str(vehicle_avg[1])},"
-            f"person,{str(person_avg[0])},{str(person_avg[1])},two-wheeled,{two_wheeled_avg[0]},{two_wheeled_avg[1]}\n")
-        results_file.write(
-            f"\nAverage of {object_count} objects per frame, with average distance of {object_density} between the objects\n")
-        results_file.write("\n\n")
-
-    # When everything done, release
-    # the video capture object
-    # cap.release()
-    out.release()
-    # Closes all the frames
-    cv2.destroyAllWindows()
-    print("End")
-    return
-
 
 def define_options(args):
     if args.nx_ip != None:
@@ -553,6 +306,107 @@ def define_options(args):
         opt.set("flow_id", args.flow_id)
     if args.video_context_id != None:
         opt.set("video_context_id", args.video_context_id)
+    if args.create_video != None:
+        opt.set("create_video", args.create_video)
+
+
+def main():
+    indexes_to_delete = set()
+    FP_counter = FN_counter = TP_counter = 0
+    if True:
+        # getting the ground-truth boxes from csv, the format is {frame_id: [(class,x1,y1,x2,y2), ... ] }
+        gt_boxes, frames_urls = get_box_from_gt_csv()
+
+        # getting rid of "dilemma_zone" annotations
+        gt_boxes = clean_gt_boxes(gt_boxes)
+
+        # getting the detection boxes from csv, the format is {frame_id: [(class,x1,y1,x2,y2), ... ] }
+        detect_boxes, frames_folder = get_box_from_detection_csv(frames_urls)
+
+        frame = os.listdir(frames_folder)[0]
+        demo_img=cv2.imread(f"{frames_folder}{frame}")
+        frame_width = int(demo_img.shape[1])
+        frame_height = int(demo_img.shape[0])
+        gt_boxes[ "frame_shape_w"] = frame_width
+        gt_boxes[ "frame_shape_h"] = frame_height
+        gt_boxes[ "gt_bb_w"] = gt_boxes["x2"]-gt_boxes["x1"]
+        gt_boxes[ "gt_bb_h"] = gt_boxes["y2"]-gt_boxes["y1"]
+        gt_boxes["gt_bb_area"]=gt_boxes[ "gt_bb_w"] * gt_boxes[ "gt_bb_h"]
+
+
+        results, FP ,FN= match_detection_gt(gt_boxes, detect_boxes)
+        # in order to save result video
+        FP[ "det_bb_w"] = FP["x2"]-FP["x1"]
+        FP[ "det_bb_h"] = FP["y2"]-FP["y1"]
+        results[ "det_bb_w"] = results["det_x2"]-results["det_x1"]
+        results[ "det_bb_h"] = results["det_y2"]-results["det_y1"]
+        results["gt_bb_area"] = results["det_bb_w"] * results["det_bb_h"]
+        FN.loc[:, "detection_category"] = "FN"
+        FP.loc[:, "detection_category"] = "FP"
+        results.loc[:, "detection_category"] = "TP"
+
+        FP = FP.rename(columns={"framdId": "frame_id"})
+        FP = FP.rename(columns={"x1": "det_x1", "x2": "det_x2", "y1": "det_y1", "y2": "det_y2", "class": "det_class"})
+
+
+        results = pd.concat([results, FN], axis=0, ignore_index=True)
+        results = pd.concat([results, FP], axis=0, ignore_index=True)
+
+        results = results.sort_values(by="frame_id")
+        results.drop(columns=[ "index"], inplace=True)
+        results.loc[:,"context_id"]=opt.video_context_id
+        results.to_csv(f"results/{opt.video_context_id}_report.xlsx")
+        # writer = pd.ExcelWriter(f"results/{opt.video_context_id}_report.xlsx", engine="xlsxwriter")
+        #
+        # results.to_excel(writer, sheet_name="results")
+        #
+        # writer.close()
+    else:
+        results = pd.read_excel(f"results/{opt.video_context_id}_report.xlsx", sheet_name='results')
+
+        frame_width=640
+        frame_height=480
+        frames_folder=f"data/{opt.video_context_id}/"
+
+    if opt.create_video:
+        print("Creating Video..")
+        vid_fps = 15.0
+        gt_color= (0, 255, 0)
+        det_color=(255, 0, 0)
+        FN_color=(255, 255, 0)
+        FP_color=(255, 0, 100)
+        out = cv2.VideoWriter(f'results/{opt.video_context_id}_video.avi', cv2.VideoWriter_fourcc('M', 'J', 'P', 'G'),
+                              vid_fps,
+                              (frame_width, frame_height))
+
+        for frame_name in sorted(os.listdir(frames_folder)):
+            frame = cv2.imread(f"{frames_folder}{frame_name}")
+            frame_ind = int(frame_name.split(".")[0])
+
+            # Saving the gt and detections results for frame_num
+            results_in_frame = results[results.frame_id==frame_ind]
+
+            cv2.putText(frame, f"{frame_name}",
+                        (0, 0),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,0), 2)  # drawing IOU score per image
+
+            for i,row in results_in_frame[results_in_frame.detection_category=="TP"].iterrows():
+                cv2.rectangle(frame, (int(row.x1),int(row.y1)), (int(row.x2),int(row.y2)), gt_color, 2)
+                cv2.rectangle(frame, (int(row.det_x1),int(row.det_y1)), (int(row.det_x2),int(row.det_y2)), det_color, 2)
+                cv2.putText(frame, "IoU: {:.2f}".format(row.iou),
+                            (int(row.det_x1)-20, int(row.det_y1)-20),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, det_color,2)  # drawing IOU score per image
+            for i,row in results_in_frame[results_in_frame.detection_category=="FP"].iterrows():
+                cv2.rectangle(frame, (int(row.det_x1),int(row.det_y1)), (int(row.det_x2),int(row.det_y2)), FP_color, 2)
+            #
+            for i,row in results_in_frame[results_in_frame.detection_category=="FN"].iterrows():
+                cv2.rectangle(frame, (int(row.x1),int(row.y1)), (int(row.x2),int(row.y2)), FN_color, 2)
+
+            out.write(frame)
+
+        out.release()
+        # Closes all the frames
+        cv2.destroyAllWindows()
 
 
 if __name__ == "__main__":

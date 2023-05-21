@@ -184,7 +184,7 @@ void run(
 
     sort(files.begin(), files.end());
 
-    outfile << "framdId,class,x1,y1,x2,y2" << endl;
+    outfile << "frame_id,class,x1,y1,x2,y2" << endl;
     int fileCounter = 1;
 
     for (const string& filename : files) {

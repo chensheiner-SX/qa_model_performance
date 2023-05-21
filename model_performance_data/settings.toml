@@ -1,3 +1,4 @@
 video_context_id = "first_location_walking_far_rgb"
 nx_ip = "172.12.10.53"
 flow_id = "rgb"
+create_video= true
