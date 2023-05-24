@@ -211,7 +211,6 @@ def bb_iou_score(boxA, boxB, epsilon=1e-5):
 
 
 def match_detection_gt(gt_boxes, det_boxes):
-    ordered_detections = pd.DataFrame().reindex_like(det_boxes)
     if "index" not in gt_boxes:
         gt_boxes.index.names = ['index']
         gt_boxes=gt_boxes.reset_index()
@@ -222,7 +221,7 @@ def match_detection_gt(gt_boxes, det_boxes):
 
     break_flag = False
     det_boxes.reset_index(inplace=True)
-    for frame_id in tqdm(gt_boxes.frame_id.unique(),desc="Matching GT to Detections:"):
+    for frame_id in tqdm(gt_boxes.frame_id.unique(),desc="Matching GT to Detections"):
         for i, gt_box in gt_boxes[gt_boxes.frame_id == frame_id].iterrows():
             best_iou = 0
             for j, det_box in det_boxes[det_boxes.framdId == frame_id].iterrows():
@@ -245,7 +244,6 @@ def match_detection_gt(gt_boxes, det_boxes):
     return results, det_boxes,FN
 
 def match_detection_gt_by_distance(gt_boxes, det_boxes):
-    ordered_detections = pd.DataFrame().reindex_like(det_boxes)
     results = define_new_columns(gt_boxes)
     break_flag = False
     det_boxes.reset_index(inplace=True)
@@ -311,8 +309,6 @@ def define_options(args):
 
 
 def main():
-    indexes_to_delete = set()
-    FP_counter = FN_counter = TP_counter = 0
     if True:
         # getting the ground-truth boxes from csv, the format is {frame_id: [(class,x1,y1,x2,y2), ... ] }
         gt_boxes, frames_urls = get_box_from_gt_csv()
@@ -338,9 +334,11 @@ def main():
         # in order to save result video
         FP[ "det_bb_w"] = FP["x2"]-FP["x1"]
         FP[ "det_bb_h"] = FP["y2"]-FP["y1"]
+        FP["det_bb_area"] = FP["det_bb_w"] * FP["det_bb_h"]
+
         results[ "det_bb_w"] = results["det_x2"]-results["det_x1"]
         results[ "det_bb_h"] = results["det_y2"]-results["det_y1"]
-        results["gt_bb_area"] = results["det_bb_w"] * results["det_bb_h"]
+        results["det_bb_area"] = results["det_bb_w"] * results["det_bb_h"]
         FN.loc[:, "detection_category"] = "FN"
         FP.loc[:, "detection_category"] = "FP"
         results.loc[:, "detection_category"] = "TP"
@@ -355,14 +353,10 @@ def main():
         results = results.sort_values(by="frame_id")
         results.drop(columns=[ "index"], inplace=True)
         results.loc[:,"context_id"]=opt.video_context_id
-        results.to_csv(f"results/{opt.video_context_id}_report.xlsx")
-        # writer = pd.ExcelWriter(f"results/{opt.video_context_id}_report.xlsx", engine="xlsxwriter")
-        #
-        # results.to_excel(writer, sheet_name="results")
-        #
-        # writer.close()
+        results.to_csv(f"results/{opt.video_context_id}_report.csv")
+
     else:
-        results = pd.read_excel(f"results/{opt.video_context_id}_report.xlsx", sheet_name='results')
+        results = pd.read_csv(f"results/{opt.video_context_id}_report.csv")
 
         frame_width=640
         frame_height=480
@@ -387,8 +381,8 @@ def main():
             results_in_frame = results[results.frame_id==frame_ind]
 
             cv2.putText(frame, f"{frame_name}",
-                        (0, 0),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,0), 2)  # drawing IOU score per image
+                        (0+20, 0+20),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,255), 2)  # drawing IOU score per image
 
             for i,row in results_in_frame[results_in_frame.detection_category=="TP"].iterrows():
                 cv2.rectangle(frame, (int(row.x1),int(row.y1)), (int(row.x2),int(row.y2)), gt_color, 2)
@@ -413,8 +407,6 @@ if __name__ == "__main__":
     args = parse_args()
     define_options(args)
     # Extracting relevant arguments
-
-    # results_folder_path = create_results_folder() #TODO: repair and uncomment when all tests are done
 
     # For now - comment this line to execute.
     # This will create detections csv file from the meerkat engine
