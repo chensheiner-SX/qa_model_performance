@@ -112,7 +112,9 @@ void signal_callback_handler(int signum) {
 void run(
     const char* a_strServerIP,
     const string a_strFramesPath,
-    const string flow
+    const string flow,
+    const double pixel_avg,
+    const double pixel_std
     )
 {
     UserData data;
@@ -154,8 +156,11 @@ void run(
         startConfiguration.getFlowSwitcher().setFlowId(sdk::FlowSwitcherFlowId::GroundRgbAndSwir);
     else
         startConfiguration.getFlowSwitcher().setFlowId(sdk::FlowSwitcherFlowId::GroundMwir);
-
-
+    if (pixel_avg!=0)
+    {
+        startConfiguration.getGroundMwirDetector().setAveragePixelValue(0,pixel_avg);
+        startConfiguration.getGroundMwirDetector().setPixelValueStandardDeviation(0,pixel_std);
+        }
     std::shared_ptr<sdk::Stream> pStream = pPipeline->startStream(
         startConfiguration);
 
@@ -247,7 +252,7 @@ void changeToLower(string& data){
 }
 int main(int argc, char** argv)
 {
-    if (argc != 5)
+    if (argc != 7)
     {
         std::cerr << "Syntax: ./sdk_sample server_ip frames_folder_path flow_id output_csv_path" << std::endl;
         exit(-1);
@@ -259,6 +264,8 @@ int main(int argc, char** argv)
     changeToLower(flow);
 
     std::string csv_output_path = static_cast<std::string>(argv[4]);
+    std::string pixel_avg = static_cast<std::string>(argv[5]);
+    std::string pixel_std = static_cast<std::string>(argv[6]);
 
     // Changing ~/ in path to /home/$USER
     size_t pos = csv_output_path.find("~/");
@@ -275,7 +282,7 @@ int main(int argc, char** argv)
     outfile.open(csv_output_path);
 
     try {
-        run(argv[1], video_path, flow);
+        run(argv[1], video_path, flow, stod(pixel_avg) , stod(pixel_std));
     }
     catch(const std::exception& e){
         std::cout << e.what() << std::endl;

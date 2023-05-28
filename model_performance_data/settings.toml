@@ -1,4 +1,9 @@
-video_context_id = "first_location_walking_far_rgb"
+video_context_id = [
+#"EinYahav_Sbpalmfield_D20211109_Pn2_SSummer_N00076_CtUninhabited_H015_LcSunlight_Ds03000_LtNone_LfPlateaus_VrScrubs_StStaged_LdTopLight_P00_V00_Mc00_B00_Js00_Dr00_T30_TsTrainVald_Set000_flir",
+    "EinYahav_Sbpalmfield_D20211109_Pn2_SSummer_N00076_CtUninhabited_H015_LcSunlight_Ds03000_LtNone_LfPlateaus_VrScrubs_StStaged_LdTopLight_P00_V00_Mc00_B00_Js00_Dr00_T30_TsTrainVald_Set000_MWIR_unknown-8bit"
+    ]
+# EinYahav_Sbnearroad_D20211109_Pn2_SSummer_N00051_CtUninhabited_H015_LcFullDaylight_Ds00550_LtNone_LfPlateaus_VrDesert_StTrainVald_LdTopLight_P09_V00_Mc00_B00_Js00_Dr00_T30_TsTrainVald_Set000_rgb
 nx_ip = "172.12.10.53"
-flow_id = "rgb"
-create_video= true
+flow_id = "flir"
+create_video= false
+generate=true
