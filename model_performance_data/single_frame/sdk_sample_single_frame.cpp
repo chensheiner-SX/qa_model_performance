@@ -113,8 +113,8 @@ void run(
     const char* a_strServerIP,
     const string a_strFramesPath,
     const string flow,
-    const double pixel_avg,
-    const double pixel_std
+    const string pixel_avg,
+    const string pixel_std
     )
 {
     UserData data;
@@ -152,14 +152,15 @@ void run(
     startConfiguration.getRawSource().setMode(sdk::RawSourceMode::SingleFrame); // set single frame mode.
     startConfiguration.getRawSource().setReadTimeoutInSec(5); // disable read timeout. Not needed when using single frame mode.
     startConfiguration.getTracksPublisher().setSourceData(sdk::PublisherDataType::Detections);
+
     if(flow == "rgb")
         startConfiguration.getFlowSwitcher().setFlowId(sdk::FlowSwitcherFlowId::GroundRgbAndSwir);
     else
         startConfiguration.getFlowSwitcher().setFlowId(sdk::FlowSwitcherFlowId::GroundMwir);
-    if (pixel_avg!=0)
+    if (stod(pixel_avg)!=0)
     {
-        startConfiguration.getGroundMwirDetector().setAveragePixelValue(0,pixel_avg);
-        startConfiguration.getGroundMwirDetector().setPixelValueStandardDeviation(0,pixel_std);
+        startConfiguration.getGroundMwirDetector().appendAveragePixelValue(stod(pixel_avg));
+        startConfiguration.getGroundMwirDetector().appendPixelValueStandardDeviation(stod(pixel_std));
         }
     std::shared_ptr<sdk::Stream> pStream = pPipeline->startStream(
         startConfiguration);
@@ -282,7 +283,7 @@ int main(int argc, char** argv)
     outfile.open(csv_output_path);
 
     try {
-        run(argv[1], video_path, flow, stod(pixel_avg) , stod(pixel_std));
+        run(argv[1], video_path, flow,pixel_avg, pixel_std);
     }
     catch(const std::exception& e){
         std::cout << e.what() << std::endl;

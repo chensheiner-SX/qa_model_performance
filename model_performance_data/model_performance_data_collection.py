@@ -164,7 +164,6 @@ def download_frames(urls):
 
 
 def generate_detections_csv(ip, video_path, flow_id, output_csv_path,pixel_mean,pixel_std):
-    print("mean std" ,pixel_mean ,pixel_std)
     if not os.path.exists(output_csv_path):
         start=perf_counter()
         os.system(
@@ -175,7 +174,7 @@ def generate_detections_csv(ip, video_path, flow_id, output_csv_path,pixel_mean,
         if os.stat(output_csv_path).st_size<10:
             print("Trying to Create Detection File again")
             os.system(
-                f"single_frame/./sdk_sample_single_frame {ip} {video_path} {flow_id} {output_csv_path}")
+                f"single_frame/./sdk_sample_single_frame {ip} {video_path} {flow_id} {output_csv_path} {pixel_mean} {pixel_std}")
 
 def get_box_from_detection_csv(urls,norm_values):
     frames_folder = download_frames(urls)
@@ -331,12 +330,12 @@ def get_normalization_data(payload_code=11,wavelength=4):
                 'host': 'database-poc.cgkbiipjug0o.eu-west-1.rds.amazonaws.com', 'db_name': 'SXDBPROD'}
     db_client = DB_Client(db_creds)
     quarry = """
-    select  distinct bits,mean_norm,std_norm
+    select  distinct bits,mean_raw,std_raw
     from dwh.sensor_normalization_values
     where dwh.sensor_normalization_values.payload_code = payload_code_value and wavelength_code=wavelength_code_value
     """
-    quarry = quarry.replace("payload_code_value",payload_code)
-    quarry = quarry.replace("wavelength_code_value", wavelength)
+    quarry = quarry.replace("payload_code_value",str(payload_code))
+    quarry = quarry.replace("wavelength_code_value", str(wavelength))
 
     normalization_data = db_client.sql_query_db(quarry)
     normalization_data.set_index("bits",inplace=True)
