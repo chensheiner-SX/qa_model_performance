@@ -16,8 +16,8 @@ def find_line_center(*args):
 
 def find_squares_distance(boxA, boxB):
     # box = (x1, y1, x2, y2)
-    boxA_center = find_line_center(boxA[1], boxA[2], boxA[3], boxA[4])  # center point (x, y)
-    boxB_center = find_line_center(boxB[1], boxB[2], boxB[3], boxB[4])  # center point (x, y)
+    boxA_center = find_line_center(boxA[0], boxA[1], boxA[2], boxA[3])  # center point (x, y)
+    boxB_center = find_line_center(boxB[0], boxB[1], boxB[2], boxB[3])  # center point (x, y)
 
     return math.sqrt((boxA_center[0] - boxB_center[0])**2 + (boxA_center[1] - boxB_center[1])**2)
 
@@ -35,7 +35,7 @@ def get_closest_distance(boxA, boxes):
     result = 0
     current_min_distance = sys.float_info.max
 
-    for index, box in enumerate(boxes):
+    for index, box in boxes.iterrows():
         distance = find_squares_distance(boxA, box)
         if distance < current_min_distance:
             current_min_distance = distance

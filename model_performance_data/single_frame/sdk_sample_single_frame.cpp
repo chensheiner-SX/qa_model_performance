@@ -153,6 +153,17 @@ void run(
     startConfiguration.getRawSource().setReadTimeoutInSec(5); // disable read timeout. Not needed when using single frame mode.
     startConfiguration.getTracksPublisher().setSourceData(sdk::PublisherDataType::Detections);
 
+    // HavatHabaron_D20210824_Pn2_SSummer_N00005_CtUrban_H080_LcSunlight_Ds01000_LtNone_LfPlateaus_VrScrubs_StNatural_LdBackLight_B00_V01_Js02_P00_T25_flir
+    // mean = 0.409656
+    // std = 0.121233
+
+    // 8bit
+    // mean = 0.417997
+    // std = 0.0325584
+// HavatHabaron_D20210824_Pn2_SSummer_N00082_CtUrban_H080_LcDeepTwilight_Ds06000_LtNone_LfPlateaus_VrScrubs_StNatural_LdSideLight_B00_V10_Js00_P00_T25_flir
+// mean    0.425823
+// std    0.00713729
+
     if(flow == "rgb")
         startConfiguration.getFlowSwitcher().setFlowId(sdk::FlowSwitcherFlowId::GroundRgbAndSwir);
     else
@@ -255,7 +266,7 @@ int main(int argc, char** argv)
 {
     if (argc != 7)
     {
-        std::cerr << "Syntax: ./sdk_sample server_ip frames_folder_path flow_id output_csv_path" << std::endl;
+        std::cerr << "Syntax: ./sdk_sample server_ip frames_folder_path flow_id output_csv_path mean_normalization std_normalization" << std::endl;
         exit(-1);
     }
 
