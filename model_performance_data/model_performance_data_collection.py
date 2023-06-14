@@ -12,12 +12,30 @@ from tqdm import tqdm
 import pandas as pd
 import numpy as np
 from time import perf_counter, sleep
+import motmetrics as mm
 
+# MOT Metrics info:
+# https://pub.towardsai.net/multi-object-tracking-metrics-1e602f364c0c
+# https://github.com/cheind/py-motmetrics/tree/develop
 # TODO chen change paths to new name
 Detection = namedtuple("Detection", ["image_path", "gt", "pred"])
 
+tracker_metrics = ['idf1', 'idp', 'idr', 'recall', 'precision', 'num_unique_objects', 'mostly_tracked',
+                   'partially_tracked', 'mostly_lost', 'num_false_positives', 'num_misses', 'num_switches',
+                   'num_fragmentations', 'mota', 'motp', 'num_transfer', 'num_ascend', 'num_migrate', 'num_predictions',
+                   'num_matches', 'num_frames', 'num_objects', 'num_detections', 'idfn', 'idtp', 'idfp']
 
-# TODO - when im done with all, re-write the parse_args function
+general_columns_names = ['context_id', 'video_gk', 'source_path',
+                         'video_name', 'sky_condition', 'light_condition',
+                         'light_intensity', 'landform', 'frame_shape_w', 'frame_shape_h']
+
+
+# ['num_frames', 'obj_frequencies', 'pred_frequencies', 'num_matches', 'num_switches', 'num_transfer',
+#                'num_ascend', 'num_migrate', 'num_false_positives', 'num_misses', 'num_detections', 'num_objects',
+#                'num_predictions', 'num_unique_objects', 'track_ratios', 'mostly_tracked', 'partially_tracked',
+#                'mostly_lost', 'num_fragmentations', 'motp', 'mota', 'precision', 'recall', 'id_global_assignment',
+#                'idfp', 'idfn', 'idtp', 'idp', 'idr', 'idf1']
+
 def parse_args():
     parser = argparse.ArgumentParser(description="IOU script")
     parser.add_argument('--video_context_id', required=False)
@@ -149,10 +167,23 @@ def get_box_from_gt_csv():
     return data_gt, data_gt.source_path[0:1]
 
 
-def clean_gt_boxes(gt_boxes):
+def clean_gt_boxes(gt_boxes,frames_folder):
     drop_indx = gt_boxes[gt_boxes.class_name == "dilemma_zone"].index
     gt_boxes = gt_boxes.drop(drop_indx)
-    return gt_boxes
+    gt_boxes.drop(columns="index", inplace=True)
+
+    frame = os.listdir(frames_folder)[0]
+    demo_img = cv2.imread(f"{frames_folder}{frame}")
+    frame_width = int(demo_img.shape[1])
+    frame_height = int(demo_img.shape[0])
+    gt_boxes["frame_shape_w"] = frame_width
+    gt_boxes["frame_shape_h"] = frame_height
+
+
+    general_data = gt_boxes[general_columns_names].drop_duplicates()
+    assert general_data.shape[0] == 1, "Video configuration change mid video"
+    gt_boxes.drop(columns=general_columns_names, inplace=True)
+    return gt_boxes,general_data
 
 
 def download_frames(urls):
@@ -163,6 +194,7 @@ def download_frames(urls):
             key = url.split("//")[1].split(bucket)[1]
             folder_name = key.split("/")[-1]
             os.makedirs(f"data/{folder_name}/", exist_ok=True)
+            print(bucket, key[1:])
             files_list = s3.get_files_in_folder(bucket, key[1:])
             for file in tqdm(files_list, desc="Downloading Frames"):
                 if not os.path.exists(f"data/{folder_name}/{file.split('/')[-1]}"):  # if file exist don't download it
@@ -176,8 +208,8 @@ def clean_tracker_data(data):
         data[["x1", "y1", "x2", "y2"]] = data[["x1", "y1", "x2", "y2"]].astype(pd.Int32Dtype())
     except Exception as e:
         print("Tracker  File Has Empty lines:", e)
-    data = data[data.score > 0]
-    # data = data[data[["x1", "y1", "x2", "y2"]].sum() > 0]
+    # data = data[data.score > 0]
+    data = data[data[["x1", "y1", "x2", "y2"]].sum(axis=1) > 0]
     return data
 
 
@@ -281,60 +313,199 @@ def bb_iou_score(box_a, box_b):
     return iou, intersection
 
 
-def match_detection_gt(gt_boxes, det_boxes, track_boxes):
-    tracker_object_match = pd.DataFrame(index=gt_boxes.object_id.unique(), columns=["track_id"])
+def match_tracker_gt(gt_boxes, track_boxes):
     if "index" not in gt_boxes:
         gt_boxes.index.names = ['index']
         gt_boxes = gt_boxes.reset_index()
 
-    results = define_new_columns(gt_boxes)
+    # results = define_new_columns(gt_boxes)
 
-    break_flag = False
-    det_boxes.reset_index(inplace=True)
-    for frame_id in tqdm(gt_boxes.frame_id.unique(), desc="Matching GT to Detections"):
-        for i, gt_box in gt_boxes[gt_boxes.frame_id == frame_id].iterrows():
-            best_iou = 0
+    gt_boxes["h"] = gt_boxes.apply(lambda x: int(x["y2"] - x["y1"]), axis=1)
+    gt_boxes["w"] = gt_boxes.apply(lambda x: int(x["x2"] - x["x1"]), axis=1)
+    track_boxes["h"] = track_boxes.apply(lambda x: int(x["y2"] - x["y1"]), axis=1)
+    track_boxes["w"] = track_boxes.apply(lambda x: int(x["x2"] - x["x1"]), axis=1)
 
-            for j, det_box in det_boxes[det_boxes.frame_id == frame_id].iterrows():
-                if not det_boxes[det_boxes.frame_id == frame_id].empty and det_box[["x1", "y1", "x2", "y2"]].sum() > 0:
-                    iou, _ = bb_iou_score(gt_box[["x1", "y1", "x2", "y2"]], det_box[["x1", "y1", "x2", "y2"]])
-                    if iou > best_iou:
-                        results.loc[
-                            results["index"] == gt_box["index"], ["det_class", "det_x1", "det_y1", "det_x2",
-                                                                  "det_y2", "iou"]] = [
-                            *det_box[["class", "x1", "y1", "x2", "y2"]].values, iou]
-                        break_flag = True
-                        break
+    acc_list = []
+    for iou_thrsh in np.arange(0, 1, 0.1):
+        acc = mot_metric_calc(gt_boxes, track_boxes, iou_threshold=iou_thrsh)
+        acc_list.append(acc)
 
-            if break_flag:
-                det_boxes = det_boxes.drop(det_box["index"], errors='ignore')
-                tracks_in_frame = track_boxes[track_boxes.frame_id == frame_id]
-                if not tracks_in_frame.empty:
-                    index = get_closest_distance(gt_box[["x1", "y1", "x2", "y2"]],
-                                                 tracks_in_frame[["x1", "y1", "x2", "y2"]])
+    mh = mm.metrics.create()
 
-                    if tracker_object_match.loc[gt_box.object_id].isna()[0]:
-                        iou, _ = bb_iou_score(gt_box[["x1", "y1", "x2", "y2"]],
-                                              tracks_in_frame.loc[index, ["x1", "y1", "x2", "y2"]])
-                        if iou > 0:
-                            tracker_object_match.loc[gt_box.object_id] = tracks_in_frame.loc[index].track_id
-                            results.loc[
-                                results["index"] == gt_box["index"], ["track_id", "track_x1", "track_y1", "track_x2",
-                                                                      "track_y2"]] = tracks_in_frame.loc[
-                                index, ["track_id", "x1", "y1", "x2", "y2"]].values
-                            tracks_in_frame.drop(index)
-                    elif tracker_object_match.loc[gt_box.object_id][0] == tracks_in_frame.loc[index].track_id:
-                        results.loc[
-                            results["index"] == gt_box["index"], ["track_id", "track_x1", "track_y1", "track_x2",
-                                                                  "track_y2"]] = tracks_in_frame.loc[
-                            index, ["track_id", "x1", "y1", "x2", "y2"]].values
-                        tracks_in_frame.drop(index)
-                break_flag = False
+    summary = mh.compute_many(
+        acc_list,
+        metrics=tracker_metrics,
+        names=np.around(np.arange(0, 1, 0.1), decimals=1),
+        generate_overall=False
+    )
+    summary.index.name = 'iou_threshold'
+    return summary
 
-    FN = results.iloc[results[results['iou'].isnull()].index]
-    results = results.drop(results[results['iou'].isnull()].index)
-    results = results.astype({"det_x1": "int", "det_y1": "int", "det_x2": "int", "det_y2": "int", "iou": "float"})
-    return results, det_boxes, FN, tracker_object_match
+
+def mot_metric_calc(gt_data, tracker_data, iou_threshold=0.5):
+    acc = mm.MOTAccumulator(auto_id=True)
+    for frame_id in tqdm(gt_data.frame_id.unique(), desc=f"Matching GT to Tracker @iou={iou_threshold:.1f}"):
+        gt_boxes_in_frame = gt_data[gt_data.frame_id == frame_id]
+        track_boxes_in_frame = tracker_data[tracker_data.frame_id == frame_id]
+
+        hypothesis = track_boxes_in_frame[["x1", "y1", "w", "h"]]  # coordinates of three hypothesis in the frame
+        # Format--> X, Y, Width, Height
+
+        gt = gt_boxes_in_frame[["x1", "y1", "w", "h"]]  # coordinates of groundtruth objects
+
+        distance_matrix = mm.distances.iou_matrix(hypothesis, gt, max_iou=iou_threshold)
+        acc.update(
+            gt_boxes_in_frame.object_id.to_list(),  # Ground truth object ID in this frame
+            track_boxes_in_frame.track_id.to_list(),  # Detector hypothesis ID in this frame
+            [distance_matrix])
+
+    return acc
+
+
+def create_detection_gt_result(gt_data, det_data,general_data):
+    final_result = pd.DataFrame()
+    acc_list=[]
+    for iou_threshold in np.arange(0, 1, 0.1):
+    # for iou_threshold in [0.7]:
+        result, acc= match_detection_gt_v2(gt_data, det_data,general_data, iou_threshold=np.round(iou_threshold, decimals=1))
+        acc_list.append(acc)
+        final_result = pd.concat([final_result, result])
+
+    return final_result,acc_list
+
+
+def match_detection_gt_v2(gt_data, det_data,general_data, iou_threshold=0.5):
+    det_data = det_data.dropna(subset=['x1', 'x2', 'y1', 'y2'])
+
+    gt_data["h"] = gt_data.apply(lambda x: int(x["y2"] - x["y1"]), axis=1)
+    gt_data["w"] = gt_data.apply(lambda x: int(x["x2"] - x["x1"]), axis=1)
+    gt_data["gt_area"] = gt_data["w"] * gt_data["h"]
+    det_data["det_h"] = det_data.apply(lambda x: int(x["y2"] - x["y1"]), axis=1)
+    det_data["det_w"] = det_data.apply(lambda x: int(x["x2"] - x["x1"]), axis=1)
+    det_data["det_area"] = det_data["det_w"] * det_data["det_h"]
+    det_data.rename(
+        columns={'class': 'det_class', 'x1': 'det_x1', 'y1': 'det_y1', 'x2': 'det_x2', 'y2': 'det_y2', }, inplace=True)
+    results = define_new_columns(gt_data,general_data.columns).iloc[:0, :].copy()
+
+
+
+    acc = mm.MOTAccumulator(auto_id=False)
+    for frame_id in tqdm(gt_data.frame_id.unique(), desc=f"Matching GT to Tracker @iou={iou_threshold:.1f}"):
+        det_boxes_in_frame = det_data[det_data.frame_id == frame_id]
+        gt_boxes_in_frame = gt_data[gt_data.frame_id == frame_id]
+
+        if det_boxes_in_frame.empty:
+            for i, row in gt_boxes_in_frame.iterrows():
+                results.loc[len(results)] = row.to_dict() | \
+                                            {"match_type": "FN"} |\
+                                            general_data.to_dict('index')[0]
+            continue
+        hypothesis = det_boxes_in_frame[
+            ["det_x1", "det_y1", "det_w", "det_h"]]  # coordinates of three hypothesis in the frame
+        # Format--> X, Y, Width, Height
+
+        gt = gt_boxes_in_frame[["x1", "y1", "w", "h"]]  # coordinates of groundtruth objects
+
+        distance_matrix = mm.distances.iou_matrix(hypothesis, gt, max_iou=iou_threshold)
+        acc.update(
+            gt_boxes_in_frame.object_id.to_list(),  # Ground truth object ID in this frame
+            det_boxes_in_frame.index.to_list(),  # Detector hypothesis ID in this frame
+            [distance_matrix], frameid=frame_id)
+        matched = acc.mot_events.loc[frame_id]
+        matched.drop_duplicates(subset=["OId", "HId"],inplace=True)
+
+        for i, row in matched.iterrows():
+            if row.Type == "MATCH" or row.Type == "ASCEND" or row.Type == "SWITCH" or row.Type == "TRANSFER" or row.Type == "MIGRATE" :
+                if gt_boxes_in_frame[gt_boxes_in_frame.object_id == row.OId].class_name.to_list()[0] in det_boxes_in_frame.loc[
+                    row.HId].det_class:
+                    results.loc[len(results)] = \
+                    gt_boxes_in_frame[gt_boxes_in_frame.object_id == row.OId].to_dict('index')[
+                        gt_boxes_in_frame[gt_boxes_in_frame.object_id == row.OId].index[0]] | \
+                    det_boxes_in_frame.loc[row.HId].to_dict() | \
+                    {"iou": 1 - row.D, "distance": row.D, "match_type": "TP"} | \
+                    general_data.to_dict('index')[0]
+                else:
+                    print("Miss match of classes")
+                    results.loc[len(results)] = \
+                        gt_boxes_in_frame[gt_boxes_in_frame.object_id == row.OId].to_dict('index')[
+                            gt_boxes_in_frame[gt_boxes_in_frame.object_id == row.OId].index[0]] | \
+                        {"iou": 1 - row.D, "distance": row.D, "match_type": "FN"} | \
+                        general_data.to_dict('index')[0]
+
+                    results.loc[len(results)] = det_boxes_in_frame.loc[row.HId].to_dict() | \
+                                                {"iou": 1 - row.D, "distance": row.D, "match_type": "FP"} | \
+                                                general_data.to_dict('index')[0]
+            if row.Type == "MISS":
+                results.loc[len(results)] = gt_boxes_in_frame[gt_boxes_in_frame.object_id == row.OId].to_dict('index')[
+                                                gt_boxes_in_frame[gt_boxes_in_frame.object_id == row.OId].index[0]] | \
+                                            {"iou": 1 - row.D, "distance": row.D, "match_type": "FN"} | \
+                                            general_data.to_dict('index')[0]
+            elif row.Type == 'FP':
+                results.loc[len(results)] = det_boxes_in_frame.loc[row.HId].to_dict() | \
+                                            {"iou": 1 - row.D, "distance": row.D, "match_type": "FP"} | \
+                                            general_data.to_dict('index')[0]
+    results["iou_threshold"] = 1 - iou_threshold
+    return results, acc
+
+
+# def match_detection_gt(gt_boxes, det_boxes, track_boxes):
+#     tracker_object_match = pd.DataFrame(index=gt_boxes.object_id.unique(), columns=["track_id"])
+#     if "index" not in gt_boxes:
+#         gt_boxes.index.names = ['index']
+#         gt_boxes = gt_boxes.reset_index()
+#
+#     results = define_new_columns(gt_boxes)
+#
+#     matched_gt_det_flag = False
+#     det_boxes.reset_index(inplace=True)
+#     track_boxes.reset_index(inplace=True)
+#     for frame_id in tqdm(gt_boxes.frame_id.unique(), desc="Matching GT to Detections"):
+#         for i, gt_box in gt_boxes[gt_boxes.frame_id == frame_id].iterrows():
+#             best_iou = 0
+#
+#             for j, det_box in det_boxes[det_boxes.frame_id == frame_id].iterrows():
+#                 if not det_boxes[det_boxes.frame_id == frame_id].empty and det_box[["x1", "y1", "x2", "y2"]].sum() > 0:
+#                     iou, _ = bb_iou_score(gt_box[["x1", "y1", "x2", "y2"]], det_box[["x1", "y1", "x2", "y2"]])
+#                     if iou > best_iou:
+#                         results.loc[
+#                             results["index"] == gt_box["index"], ["det_class", "det_x1", "det_y1", "det_x2",
+#                                                                   "det_y2", "iou"]] = [
+#                             *det_box[["class", "x1", "y1", "x2", "y2"]].values, iou]
+#                         matched_gt_det_flag = True
+#
+#             if matched_gt_det_flag:
+#                 det_boxes = det_boxes.drop(det_box["index"], errors='ignore')
+#                 tracks_in_frame = track_boxes[track_boxes.frame_id == frame_id]
+#                 if not tracks_in_frame.empty:
+#                     index = get_closest_distance(gt_box[["x1", "y1", "x2", "y2"]],
+#                                                  tracks_in_frame[["x1", "y1", "x2", "y2"]])
+#
+#                     if tracker_object_match.loc[gt_box.object_id].isna()[0]:
+#                         iou, _ = bb_iou_score(gt_box[["x1", "y1", "x2", "y2"]],
+#                                               tracks_in_frame.loc[index, ["x1", "y1", "x2", "y2"]])
+#                         if iou > 0:
+#                             tracker_object_match.loc[gt_box.object_id] = tracks_in_frame.loc[index].track_id
+#                             results.loc[
+#                                 results["index"] == gt_box["index"], ["track_id", "track_x1", "track_y1", "track_x2",
+#                                                                       "track_y2"]] = tracks_in_frame.loc[
+#                                 index, ["track_id", "x1", "y1", "x2", "y2"]].values
+#
+#                             tracks_in_frame.drop(index, inplace=True)
+#                             track_boxes.drop(index, inplace=True)
+#
+#                     elif tracker_object_match.loc[gt_box.object_id][0] == tracks_in_frame.loc[index].track_id:
+#                         results.loc[
+#                             results["index"] == gt_box["index"], ["track_id", "track_x1", "track_y1", "track_x2",
+#                                                                   "track_y2"]] = tracks_in_frame.loc[
+#                             index, ["track_id", "x1", "y1", "x2", "y2"]].values
+#                         tracks_in_frame.drop(index, inplace=True)
+#                         track_boxes.drop(index, inplace=True)
+#                 matched_gt_det_flag = False
+#
+#     FN = results.iloc[results[results['iou'].isnull()].index]
+#     results = results.drop(results[results['iou'].isnull()].index)
+#     results = results.astype({"det_x1": "int", "det_y1": "int", "det_x2": "int", "det_y2": "int", "iou": "float"})
+#     return results, det_boxes, FN, tracker_object_match
 
 
 #
@@ -365,20 +536,24 @@ def match_detection_gt(gt_boxes, det_boxes, track_boxes):
 #     return results, det_boxes, FN
 
 
-def define_new_columns(data):
+def define_new_columns(data,general_columns):
+    data.loc[:,general_columns]=None
     data.loc[:, "det_class"] = None
     data.loc[:, "det_subclass"] = None
     data.loc[:, "det_x1"] = None
     data.loc[:, "det_y1"] = None
     data.loc[:, "det_x2"] = None
     data.loc[:, "det_y2"] = None
-    data.loc[:, "track_x1"] = None
-    data.loc[:, "track_y1"] = None
-    data.loc[:, "track_x2"] = None
-    data.loc[:, "track_y2"] = None
-    data.loc[:, "det_score"] = None  # TODO to be added
+    data.loc[:, "det_area"] = None
+    # data.loc[:, "track_x1"] = None
+    # data.loc[:, "track_y1"] = None
+    # data.loc[:, "track_x2"] = None
+    # data.loc[:, "track_y2"] = None
+    # data.loc[:, "det_score"] = None
     data.loc[:, "iou"] = None
-    data.loc[:, "track_id"] = None
+    data.loc[:, "distance"] = None
+    data.loc[:, "match_type"] = None
+    # data.loc[:, "track_id"] = None
     return data
 
 
@@ -418,51 +593,29 @@ def main():
         # getting the ground-truth boxes from csv, the format is {frame_id: [(class,x1,y1,x2,y2), ... ] }
         gt_boxes, frames_urls = get_box_from_gt_csv()
 
-        # getting rid of "dilemma_zone" annotations
-        gt_boxes = clean_gt_boxes(gt_boxes)
 
         # getting the detection boxes from csv, the format is {frame_id: [(class,x1,y1,x2,y2), ... ] }
         norm_data = get_normalization_data()
         detect_boxes, tracker_boxes, frames_folder = get_box_from_detection_csv(frames_urls, norm_data)
-        # assert detect_boxes.x1.sum()!=0, "No Objects in Video"
 
-        frame = os.listdir(frames_folder)[0]
-        demo_img = cv2.imread(f"{frames_folder}{frame}")
-        frame_width = int(demo_img.shape[1])
-        frame_height = int(demo_img.shape[0])
-        gt_boxes["frame_shape_w"] = frame_width
-        gt_boxes["frame_shape_h"] = frame_height
-        gt_boxes["gt_bb_w"] = gt_boxes["x2"] - gt_boxes["x1"]
-        gt_boxes["gt_bb_h"] = gt_boxes["y2"] - gt_boxes["y1"]
-        gt_boxes["gt_bb_area"] = gt_boxes["gt_bb_w"] * gt_boxes["gt_bb_h"]
+        # getting rid of "dilemma_zone" annotations
+        gt_boxes, general_data = clean_gt_boxes(gt_boxes,frames_folder)
 
-        results, FP, FN, tracker_object_id = match_detection_gt(gt_boxes, detect_boxes, tracker_boxes)
-        # in order to save result video
-        FP["det_bb_w"] = FP["x2"] - FP["x1"]
-        FP["det_bb_h"] = FP["y2"] - FP["y1"]
-        FP["det_bb_area"] = FP["det_bb_w"] * FP["det_bb_h"]
 
-        results["det_bb_w"] = results["det_x2"] - results["det_x1"]
-        results["det_bb_h"] = results["det_y2"] - results["det_y1"]
-        results["det_bb_area"] = results["det_bb_w"] * results["det_bb_h"]
-        FN.loc[:, "detection_category"] = "FN"
-        FP.loc[:, "detection_category"] = "FP"
-        if not results.empty:
-            results.loc[:, "detection_category"] = "TP"
 
-        FP = FP.rename(columns={"frame_id": "frame_id"})
-        FP = FP.rename(columns={"x1": "det_x1", "x2": "det_x2", "y1": "det_y1", "y2": "det_y2", "class": "det_class"})
+        # gt_boxes["gt_bb_w"] = gt_boxes["x2"] - gt_boxes["x1"]
+        # gt_boxes["gt_bb_h"] = gt_boxes["y2"] - gt_boxes["y1"]
+        # gt_boxes["gt_bb_area"] = gt_boxes["gt_bb_w"] * gt_boxes["gt_bb_h"]
 
-        FP = FP[FP["det_y1"].notna()]
-        FN = FN[FN["y1"].notna()]
+        # final_result,acc_list = create_detection_gt_result(gt_boxes, detect_boxes,general_data)
+        # final_result.to_csv(f"results/{opt.video_context_id}_detector_report.csv")
 
-        results = pd.concat([results, FN], axis=0, ignore_index=True)
-        results = pd.concat([results, FP], axis=0, ignore_index=True)
+        tracker_report=match_tracker_gt(gt_boxes,tracker_boxes)
+        general_temp=general_data.loc[general_data.index.repeat(len(tracker_report))]
+        general_temp.index = tracker_report.index
+        tracker_report.loc[:,general_columns_names]=general_temp
+        tracker_report.to_csv(f"results/{opt.video_context_id}_tracker_report.csv")
 
-        results = results.sort_values(by="frame_id")
-        results.drop(columns=["index"], inplace=True)
-        results.loc[:, "context_id"] = opt.video_context_id
-        results.to_csv(f"results/{opt.video_context_id}_report.csv")
         if os.path.exists(gerneral_report_file):
             general = pd.read_csv(gerneral_report_file, index_col=False)
             if not general.context_id.unique().__contains__(opt.video_context_id):
@@ -508,8 +661,10 @@ def main():
 
             for i, row in results_in_frame[results_in_frame.detection_category == "TP"].iterrows():
                 cv2.rectangle(frame, (int(row.x1), int(row.y1)), (int(row.x2), int(row.y2)), gt_color, 2)
-                if not (pd.isna(row.track_x1) and pd.isna(row.track_y1) and pd.isna(row.track_x2) and pd.isna(row.track_y2)):
-                    cv2.rectangle(frame, (int(row.track_x1), int(row.track_y1)), (int(row.track_x2), int(row.track_y2)), (100, 200, 255), 2)
+                if not (pd.isna(row.track_x1) and pd.isna(row.track_y1) and pd.isna(row.track_x2) and pd.isna(
+                        row.track_y2)):
+                    cv2.rectangle(frame, (int(row.track_x1), int(row.track_y1)), (int(row.track_x2), int(row.track_y2)),
+                                  (100, 200, 255), 2)
                 cv2.rectangle(frame, (int(row.det_x1), int(row.det_y1)), (int(row.det_x2), int(row.det_y2)), det_color,
                               2)
                 cv2.putText(frame, "IoU: {:.2f}".format(row.iou),
