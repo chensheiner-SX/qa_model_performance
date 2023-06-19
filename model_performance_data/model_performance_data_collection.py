@@ -27,7 +27,7 @@ tracker_metrics = ['idf1', 'idp', 'idr', 'recall', 'precision', 'num_unique_obje
 
 general_columns_names = ['context_id', 'video_gk', 'source_path',
                          'video_name', 'sky_condition', 'light_condition',
-                         'light_intensity', 'landform', 'frame_shape_w', 'frame_shape_h']
+                         'light_intensity', 'landform', 'frame_shape_w', 'frame_shape_h','payload_code','wavelength_code']
 
 
 # ['num_frames', 'obj_frequencies', 'pred_frequencies', 'num_matches', 'num_switches', 'num_transfer',
@@ -81,7 +81,7 @@ def clean_data_gt(gt, db_client):
     gt['subclass_name'] = gt.subclass_code.apply(lambda x: subclass_df[x])
     gt = gt.drop_duplicates(subset=["frame_id", "object_id"])
     gt = gt.reset_index()
-    gt.drop(columns=["index", "class_code", "subclass_code"], inplace=True)
+    gt.drop(columns=["index", "class_code", "subclass_code"], inplace=True,errors='ignore')
     gt.index.names = ['index']
     return gt
 
@@ -125,6 +125,9 @@ def get_data(video_id):
             dwh.videos.source_path,
             dwh.objects.object_id,
             dwh.videos.video_name,
+			dwh.videos.bits,
+			dwh.videos.payload_code,dwh.videos.wavelength_code,
+			dwh.get_desc('wavelength',wavelength_code) as wavelength,
             dwh.get_desc('sky_condition',sky_condition_code) as sky_condition,
             dwh.get_desc('light_condition',light_condition_code) as light_condition,
             dwh.get_desc('light_intensity',light_intensity_code) as light_intensity,
@@ -164,16 +167,20 @@ def get_box_from_gt_csv():
     data_gt.coordinates = data_gt.coordinates.apply(lambda x: np.concatenate(x[0:3:2]))
     data_gt[["x1", "y1", "x2", "y2"]] = pd.DataFrame(data_gt.coordinates.tolist(), index=data_gt.index)
     data_gt[["x1", "y1", "x2", "y2"]] = data_gt[["x1", "y1", "x2", "y2"]].astype(int)
+    # assert "data-lake-production-source" not in data_gt.source_path[0], ["Data is in S3 Bucket that i dont have access to, data-lake-production-source ",data_gt.source_path[0]]
     return data_gt, data_gt.source_path[0:1]
 
 
 def clean_gt_boxes(gt_boxes,frames_folder):
     drop_indx = gt_boxes[gt_boxes.class_name == "dilemma_zone"].index
-    gt_boxes = gt_boxes.drop(drop_indx)
-    gt_boxes.drop(columns="index", inplace=True)
+    gt_boxes = gt_boxes.drop(drop_indx,errors='ignore')
+    gt_boxes.drop(columns="index", inplace=True,errors='ignore')
 
     frame = os.listdir(frames_folder)[0]
     demo_img = cv2.imread(f"{frames_folder}{frame}")
+    if not isinstance(demo_img,np.ndarray) :
+        demo_img = cv2.imread(f"{frames_folder}/{frame}")
+
     frame_width = int(demo_img.shape[1])
     frame_height = int(demo_img.shape[0])
     gt_boxes["frame_shape_w"] = frame_width
@@ -182,7 +189,7 @@ def clean_gt_boxes(gt_boxes,frames_folder):
 
     general_data = gt_boxes[general_columns_names].drop_duplicates()
     assert general_data.shape[0] == 1, "Video configuration change mid video"
-    gt_boxes.drop(columns=general_columns_names, inplace=True)
+    gt_boxes.drop(columns=general_columns_names, inplace=True,errors='ignore')
     return gt_boxes,general_data
 
 
@@ -241,8 +248,9 @@ def generate_detections_csv(ip, video_path, flow_id, output_csv_path, pixel_mean
                 f"single_frame/./sdk_sample_single_frame {ip} {video_path} {flow_id} {output_csv_path} {pixel_mean} {pixel_std}")
 
 
-def get_box_from_detection_csv(urls, norm_values):
-    frames_folder = download_frames(urls)
+def get_box_from_detection_csv(urls, norm_values,flow):
+    # frames_folder = download_frames(urls) #TODO change back
+    frames_folder = '/home/chen/PycharmProjects/qa-scripts/model_performance_data/data/RitzCarltonHerzliya_D20210706_Pn8_SSummer_N00027_CtNone_H030_LcFullDaylight_Ds01500_LtNone_LfDunes_VrNone_StNatural_LdBackLight_B00_V00_Js00_P15_T30_MWIR_unknown-8bit'
     video_path = opt.video_context_id
     if not video_path.endswith('/'):
         video_path += '/'
@@ -252,14 +260,19 @@ def get_box_from_detection_csv(urls, norm_values):
 
     csv_path_detection = f"{os.getcwd()}/data/detections/{opt.video_context_id}_detections.csv"
     csv_path_tracker = f"{os.getcwd()}/data/detections/{opt.video_context_id}_tracker.csv"
-    if "8bit" in video_path:
-        values = norm_values.loc['8']
-    else:
-        values = norm_values.loc['16']
-    generate_detections_csv(opt.nx_ip, video_path, opt.flow_id, csv_path_detection, values[0], values[1])
+    try:
+        if "8bit" in video_path:
+            values = norm_values.loc['8']
+        else:
+            values = norm_values.loc['16']
+    except KeyError:
+        print("no correct type of compression in normalization-values database.")
+        print("using the first configuration as values:",norm_values.iloc[:1])
+        values = norm_values.iloc[0]
+    generate_detections_csv(opt.nx_ip, video_path, flow, csv_path_detection, values[0], values[1])
     sleep(5)
     video_path += f"%05d.{extension}"
-    generate_tracker_csv(opt.nx_ip, video_path, opt.flow_id, csv_path_tracker, values[0], values[1])
+    generate_tracker_csv(opt.nx_ip, video_path, flow, csv_path_tracker, values[0], values[1])
     assert os.path.exists(csv_path_detection) and os.stat(
         csv_path_detection).st_size > 10, "Detection File Creation Failed"
     assert os.path.exists(csv_path_tracker) and os.stat(csv_path_tracker).st_size > 10, "Tracker File Creation Failed"
@@ -425,7 +438,7 @@ def match_detection_gt_v2(gt_data, det_data,general_data, iou_threshold=0.5):
                     {"iou": 1 - row.D, "distance": row.D, "match_type": "TP"} | \
                     general_data.to_dict('index')[0]
                 else:
-                    print("Miss match of classes")
+                    # print("Miss match of classes")
                     results.loc[len(results)] = \
                         gt_boxes_in_frame[gt_boxes_in_frame.object_id == row.OId].to_dict('index')[
                             gt_boxes_in_frame[gt_boxes_in_frame.object_id == row.OId].index[0]] | \
@@ -577,6 +590,7 @@ def get_normalization_data(payload_code=11, wavelength=4):
     from dwh.sensor_normalization_values
     where dwh.sensor_normalization_values.payload_code = payload_code_value and wavelength_code=wavelength_code_value
     """
+
     quarry = quarry.replace("payload_code_value", str(payload_code))
     quarry = quarry.replace("wavelength_code_value", str(wavelength))
 
@@ -586,7 +600,7 @@ def get_normalization_data(payload_code=11, wavelength=4):
 
 
 def main():
-    print(f"Working on Video: {opt.video_context_id},{opt.generate}")
+    print(f"Working on Video: {opt.video_context_id}")
     if opt.generate:
         gerneral_report_file = "results/General_report.csv"
 
@@ -595,8 +609,10 @@ def main():
 
 
         # getting the detection boxes from csv, the format is {frame_id: [(class,x1,y1,x2,y2), ... ] }
-        norm_data = get_normalization_data()
-        detect_boxes, tracker_boxes, frames_folder = get_box_from_detection_csv(frames_urls, norm_data)
+        norm_data = get_normalization_data(gt_boxes.payload_code[0],gt_boxes.wavelength_code[0])
+        flow=gt_boxes.wavelength[0]
+        print(f"Video's Flow is: {flow}\n")
+        detect_boxes, tracker_boxes, frames_folder = get_box_from_detection_csv(frames_urls, norm_data,flow)
 
         # getting rid of "dilemma_zone" annotations
         gt_boxes, general_data = clean_gt_boxes(gt_boxes,frames_folder)
@@ -607,25 +623,25 @@ def main():
         # gt_boxes["gt_bb_h"] = gt_boxes["y2"] - gt_boxes["y1"]
         # gt_boxes["gt_bb_area"] = gt_boxes["gt_bb_w"] * gt_boxes["gt_bb_h"]
 
-        # final_result,acc_list = create_detection_gt_result(gt_boxes, detect_boxes,general_data)
-        # final_result.to_csv(f"results/{opt.video_context_id}_detector_report.csv")
+        final_result,acc_list = create_detection_gt_result(gt_boxes, detect_boxes,general_data)
+        final_result.to_csv(f"results/{opt.video_context_id}_detector_report.csv")
 
         tracker_report=match_tracker_gt(gt_boxes,tracker_boxes)
         general_temp=general_data.loc[general_data.index.repeat(len(tracker_report))]
         general_temp.index = tracker_report.index
         tracker_report.loc[:,general_columns_names]=general_temp
         tracker_report.to_csv(f"results/{opt.video_context_id}_tracker_report.csv")
-
-        if os.path.exists(gerneral_report_file):
-            general = pd.read_csv(gerneral_report_file, index_col=False)
-            if not general.context_id.unique().__contains__(opt.video_context_id):
-                print("Adding to General Report...")
-                pd.concat([general, results], axis=0, ignore_index=True).to_csv(gerneral_report_file, index=False)
-            else:
-                print("Results already in General Report...")
-        else:
-            print("Creating General Report...")
-            results.to_csv(gerneral_report_file)
+        #
+        # if os.path.exists(gerneral_report_file):
+        #     general = pd.read_csv(gerneral_report_file, index_col=False)
+        #     # if not general.context_id.unique().__contains__(opt.video_context_id):
+        #     #     print("Adding to General Report...")
+        #     #     pd.concat([general, results], axis=0, ignore_index=True).to_csv(gerneral_report_file, index=False)
+        #     # else:
+        #     #     print("Results already in General Report...")
+        # else:
+        #     print("Creating General Report...")
+        #     results.to_csv(gerneral_report_file)
 
 
     else:
