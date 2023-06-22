@@ -114,7 +114,8 @@ void run(
     const string a_strFramesPath,
     const string flow,
     const string pixel_avg,
-    const string pixel_std
+    const string pixel_std,
+    const string bit
     )
 {
     UserData data;
@@ -203,7 +204,11 @@ void run(
 
     outfile << "frame_id,class,x1,y1,x2,y2" << endl;
     int fileCounter = 1;
+    sdk::PixelFormat image_decode=sdk::PixelFormat::RGB8;
 
+    if (bit=="16"){
+       image_decode=sdk::PixelFormat::RGB16;
+        }
     for (const string& filename : files) {
         string extension;
         size_t dotPos = filename.rfind(".");
@@ -223,12 +228,13 @@ void run(
         cv::cvtColor(frame, frame, cv::COLOR_BGR2RGB);
 
         sdk::SingleFrameOutputs result = pStream->processSingleFrame(
-                sdk::RawSourceId::RawSource,
-                sdk::SingleFrameOutputType::Detections,
-                frame.data,
-                frame.cols,
-                frame.rows,
-                sdk::PixelFormat::RGB8);
+            sdk::RawSourceId::RawSource,
+            sdk::SingleFrameOutputType::Detections,
+            frame.data,
+            frame.cols,
+            frame.rows,
+            image_decode);
+
 
         // processing result to detections.csv
         std::vector<sdk::SingleFrameOutput> vResults = result.Data;
@@ -264,7 +270,7 @@ void changeToLower(string& data){
 }
 int main(int argc, char** argv)
 {
-    if (argc != 7)
+    if (argc != 8)
     {
         std::cerr << "Syntax: ./sdk_sample server_ip frames_folder_path flow_id output_csv_path mean_normalization std_normalization" << std::endl;
         exit(-1);
@@ -278,6 +284,10 @@ int main(int argc, char** argv)
     std::string csv_output_path = static_cast<std::string>(argv[4]);
     std::string pixel_avg = static_cast<std::string>(argv[5]);
     std::string pixel_std = static_cast<std::string>(argv[6]);
+    std::string bit = static_cast<std::string>(argv[7]);
+
+    std::cout <<"mean "<< pixel_avg<< std::endl;
+    std::cout <<"std "<< pixel_std<< std::endl;
 
     // Changing ~/ in path to /home/$USER
     size_t pos = csv_output_path.find("~/");
@@ -294,7 +304,7 @@ int main(int argc, char** argv)
     outfile.open(csv_output_path);
 
     try {
-        run(argv[1], video_path, flow,pixel_avg, pixel_std);
+        run(argv[1], video_path, flow,pixel_avg, pixel_std,bit);
     }
     catch(const std::exception& e){
         std::cout << e.what() << std::endl;

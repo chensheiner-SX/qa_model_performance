@@ -25,9 +25,9 @@ tracker_metrics = ['idf1', 'idp', 'idr', 'recall', 'precision', 'num_unique_obje
                    'num_fragmentations', 'mota', 'motp', 'num_transfer', 'num_ascend', 'num_migrate', 'num_predictions',
                    'num_matches', 'num_frames', 'num_objects', 'num_detections', 'idfn', 'idtp', 'idfp']
 
-general_columns_names = ['context_id', 'video_gk', 'source_path',
+general_columns_names = ['context_id', 'video_gk', 'bits','source_path',
                          'video_name', 'sky_condition', 'light_condition',
-                         'light_intensity', 'landform', 'frame_shape_w', 'frame_shape_h','payload_code','wavelength_code']
+                         'light_intensity', 'landform', 'frame_shape_w', 'frame_shape_h','payload_code','wavelength_code','wavelength']
 
 
 # ['num_frames', 'obj_frequencies', 'pred_frequencies', 'num_matches', 'num_switches', 'num_transfer',
@@ -126,7 +126,8 @@ def get_data(video_id):
             dwh.objects.object_id,
             dwh.videos.video_name,
 			dwh.videos.bits,
-			dwh.videos.payload_code,dwh.videos.wavelength_code,
+			dwh.videos.payload_code,
+			dwh.videos.wavelength_code,
 			dwh.get_desc('wavelength',wavelength_code) as wavelength,
             dwh.get_desc('sky_condition',sky_condition_code) as sky_condition,
             dwh.get_desc('light_condition',light_condition_code) as light_condition,
@@ -220,37 +221,37 @@ def clean_tracker_data(data):
     return data
 
 
-def generate_tracker_csv(ip, video_path, flow_id, output_csv_path, pixel_mean, pixel_std):
+def generate_tracker_csv(ip, video_path, flow_id, output_csv_path, pixel_mean, pixel_std,bit):
     if not os.path.exists(output_csv_path):
         start = perf_counter()
         os.system(
-            f"single_frame/./sdk_sample_raw_frames {ip} {video_path} {flow_id} {output_csv_path} {pixel_mean} {pixel_std}")
+            f"single_frame/./sdk_sample_raw_frames {ip} {video_path} {flow_id} {output_csv_path} {pixel_mean} {pixel_std} {bit}")
         print("Tracker time:", perf_counter() - start)
     else:
         print("Tracker CSV Already Exist")
         if os.stat(output_csv_path).st_size < 10:
             print("Trying to Create Tracker File again")
             os.system(
-                f"single_frame/./sdk_sample_raw_frames {ip} {video_path} {flow_id} {output_csv_path} {pixel_mean} {pixel_std}")
+                f"single_frame/./sdk_sample_raw_frames {ip} {video_path} {flow_id} {output_csv_path} {pixel_mean} {pixel_std} {bit}")
 
 
-def generate_detections_csv(ip, video_path, flow_id, output_csv_path, pixel_mean, pixel_std):
+def generate_detections_csv(ip, video_path, flow_id, output_csv_path, pixel_mean, pixel_std,bit):
     if not os.path.exists(output_csv_path):
         start = perf_counter()
         os.system(
-            f"single_frame/./sdk_sample_single_frame {ip} {video_path} {flow_id} {output_csv_path} {pixel_mean} {pixel_std}")
+            f"single_frame/./sdk_sample_single_frame {ip} {video_path} {flow_id} {output_csv_path} {pixel_mean} {pixel_std} {bit}")
         print("Detections time:", perf_counter() - start)
     else:
         print("Detections CSV Already Exist")
         if os.stat(output_csv_path).st_size < 10:
             print("Trying to Create Detection File again")
             os.system(
-                f"single_frame/./sdk_sample_single_frame {ip} {video_path} {flow_id} {output_csv_path} {pixel_mean} {pixel_std}")
+                f"single_frame/./sdk_sample_single_frame {ip} {video_path} {flow_id} {output_csv_path} {pixel_mean} {pixel_std} {bit}")
 
 
 def get_box_from_detection_csv(urls, norm_values,flow):
-    # frames_folder = download_frames(urls) #TODO change back
-    frames_folder = '/home/chen/PycharmProjects/qa-scripts/model_performance_data/data/RitzCarltonHerzliya_D20210706_Pn8_SSummer_N00027_CtNone_H030_LcFullDaylight_Ds01500_LtNone_LfDunes_VrNone_StNatural_LdBackLight_B00_V00_Js00_P15_T30_MWIR_unknown-8bit'
+    frames_folder = download_frames(urls)
+    # frames_folder = '/home/chen/PycharmProjects/qa-scripts/model_performance_data/data/RitzCarltonHerzliya_D20210706_Pn8_SSummer_N00027_CtNone_H030_LcFullDaylight_Ds01500_LtNone_LfDunes_VrNone_StNatural_LdBackLight_B00_V00_Js00_P15_T30_MWIR_unknown-8bit'
     video_path = opt.video_context_id
     if not video_path.endswith('/'):
         video_path += '/'
@@ -259,20 +260,22 @@ def get_box_from_detection_csv(urls, norm_values,flow):
     # print(f"extention of images:{extension}")
 
     csv_path_detection = f"{os.getcwd()}/data/detections/{opt.video_context_id}_detections.csv"
-    csv_path_tracker = f"{os.getcwd()}/data/detections/{opt.video_context_id}_tracker.csv"
+    csv_path_tracker = f"{os.getcwd()}/data/trackers/{opt.video_context_id}_tracker.csv"
+    bit="8"
     try:
         if "8bit" in video_path:
             values = norm_values.loc['8']
         else:
+            bit="16"
             values = norm_values.loc['16']
     except KeyError:
         print("no correct type of compression in normalization-values database.")
         print("using the first configuration as values:",norm_values.iloc[:1])
         values = norm_values.iloc[0]
-    generate_detections_csv(opt.nx_ip, video_path, flow, csv_path_detection, values[0], values[1])
+    generate_detections_csv(opt.nx_ip, video_path, flow, csv_path_detection, values[0], values[1],bit)
     sleep(5)
     video_path += f"%05d.{extension}"
-    generate_tracker_csv(opt.nx_ip, video_path, flow, csv_path_tracker, values[0], values[1])
+    generate_tracker_csv(opt.nx_ip, video_path, flow, csv_path_tracker, values[0], values[1],bit)
     assert os.path.exists(csv_path_detection) and os.stat(
         csv_path_detection).st_size > 10, "Detection File Creation Failed"
     assert os.path.exists(csv_path_tracker) and os.stat(csv_path_tracker).st_size > 10, "Tracker File Creation Failed"
@@ -389,10 +392,11 @@ def create_detection_gt_result(gt_data, det_data,general_data):
 
 def match_detection_gt_v2(gt_data, det_data,general_data, iou_threshold=0.5):
     det_data = det_data.dropna(subset=['x1', 'x2', 'y1', 'y2'])
-
+    assert not det_data.empty , " Model found no detections"
     gt_data["h"] = gt_data.apply(lambda x: int(x["y2"] - x["y1"]), axis=1)
     gt_data["w"] = gt_data.apply(lambda x: int(x["x2"] - x["x1"]), axis=1)
     gt_data["gt_area"] = gt_data["w"] * gt_data["h"]
+
     det_data["det_h"] = det_data.apply(lambda x: int(x["y2"] - x["y1"]), axis=1)
     det_data["det_w"] = det_data.apply(lambda x: int(x["x2"] - x["x1"]), axis=1)
     det_data["det_area"] = det_data["det_w"] * det_data["det_h"]
@@ -596,6 +600,9 @@ def get_normalization_data(payload_code=11, wavelength=4):
 
     normalization_data = db_client.sql_query_db(quarry)
     normalization_data.set_index("bits", inplace=True)
+    print(normalization_data)
+    # normalization_dat=pd.DataFrame({"mean_norm":0.425823 ,"std_norm":0.00713729},index=['16'])
+    # normalization_dat.index.name = 'bits'
     return normalization_data
 
 
