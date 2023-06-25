@@ -13,6 +13,8 @@ import pandas as pd
 import numpy as np
 from time import perf_counter, sleep
 import motmetrics as mm
+import warnings
+warnings.filterwarnings('ignore')
 
 # MOT Metrics info:
 # https://pub.towardsai.net/multi-object-tracking-metrics-1e602f364c0c
@@ -156,6 +158,7 @@ def get_data(video_id):
             data_gt = get_data_no_context_id(video_id, db_client)
         data_gt = clean_data_gt(data_gt, db_client)
         data_gt.to_csv(f"{os.getcwd()}/data/GT/{video_id}.csv")
+        data_gt = pd.read_csv(f"{os.getcwd()}/data/GT/{video_id}.csv")
     else:
         print("GT CSV Already Exist")
         data_gt = pd.read_csv(f"{os.getcwd()}/data/GT/{video_id}.csv")
@@ -202,7 +205,6 @@ def download_frames(urls):
             key = url.split("//")[1].split(bucket)[1]
             folder_name = key.split("/")[-1]
             os.makedirs(f"data/{folder_name}/", exist_ok=True)
-            print(bucket, key[1:])
             files_list = s3.get_files_in_folder(bucket, key[1:])
             for file in tqdm(files_list, desc="Downloading Frames"):
                 if not os.path.exists(f"data/{folder_name}/{file.split('/')[-1]}"):  # if file exist don't download it
@@ -247,6 +249,7 @@ def generate_detections_csv(ip, video_path, flow_id, output_csv_path, pixel_mean
             print("Trying to Create Detection File again")
             os.system(
                 f"single_frame/./sdk_sample_single_frame {ip} {video_path} {flow_id} {output_csv_path} {pixel_mean} {pixel_std} {bit}")
+
 
 
 def get_box_from_detection_csv(urls, norm_values,flow):
@@ -465,94 +468,6 @@ def match_detection_gt_v2(gt_data, det_data,general_data, iou_threshold=0.5):
     return results, acc
 
 
-# def match_detection_gt(gt_boxes, det_boxes, track_boxes):
-#     tracker_object_match = pd.DataFrame(index=gt_boxes.object_id.unique(), columns=["track_id"])
-#     if "index" not in gt_boxes:
-#         gt_boxes.index.names = ['index']
-#         gt_boxes = gt_boxes.reset_index()
-#
-#     results = define_new_columns(gt_boxes)
-#
-#     matched_gt_det_flag = False
-#     det_boxes.reset_index(inplace=True)
-#     track_boxes.reset_index(inplace=True)
-#     for frame_id in tqdm(gt_boxes.frame_id.unique(), desc="Matching GT to Detections"):
-#         for i, gt_box in gt_boxes[gt_boxes.frame_id == frame_id].iterrows():
-#             best_iou = 0
-#
-#             for j, det_box in det_boxes[det_boxes.frame_id == frame_id].iterrows():
-#                 if not det_boxes[det_boxes.frame_id == frame_id].empty and det_box[["x1", "y1", "x2", "y2"]].sum() > 0:
-#                     iou, _ = bb_iou_score(gt_box[["x1", "y1", "x2", "y2"]], det_box[["x1", "y1", "x2", "y2"]])
-#                     if iou > best_iou:
-#                         results.loc[
-#                             results["index"] == gt_box["index"], ["det_class", "det_x1", "det_y1", "det_x2",
-#                                                                   "det_y2", "iou"]] = [
-#                             *det_box[["class", "x1", "y1", "x2", "y2"]].values, iou]
-#                         matched_gt_det_flag = True
-#
-#             if matched_gt_det_flag:
-#                 det_boxes = det_boxes.drop(det_box["index"], errors='ignore')
-#                 tracks_in_frame = track_boxes[track_boxes.frame_id == frame_id]
-#                 if not tracks_in_frame.empty:
-#                     index = get_closest_distance(gt_box[["x1", "y1", "x2", "y2"]],
-#                                                  tracks_in_frame[["x1", "y1", "x2", "y2"]])
-#
-#                     if tracker_object_match.loc[gt_box.object_id].isna()[0]:
-#                         iou, _ = bb_iou_score(gt_box[["x1", "y1", "x2", "y2"]],
-#                                               tracks_in_frame.loc[index, ["x1", "y1", "x2", "y2"]])
-#                         if iou > 0:
-#                             tracker_object_match.loc[gt_box.object_id] = tracks_in_frame.loc[index].track_id
-#                             results.loc[
-#                                 results["index"] == gt_box["index"], ["track_id", "track_x1", "track_y1", "track_x2",
-#                                                                       "track_y2"]] = tracks_in_frame.loc[
-#                                 index, ["track_id", "x1", "y1", "x2", "y2"]].values
-#
-#                             tracks_in_frame.drop(index, inplace=True)
-#                             track_boxes.drop(index, inplace=True)
-#
-#                     elif tracker_object_match.loc[gt_box.object_id][0] == tracks_in_frame.loc[index].track_id:
-#                         results.loc[
-#                             results["index"] == gt_box["index"], ["track_id", "track_x1", "track_y1", "track_x2",
-#                                                                   "track_y2"]] = tracks_in_frame.loc[
-#                             index, ["track_id", "x1", "y1", "x2", "y2"]].values
-#                         tracks_in_frame.drop(index, inplace=True)
-#                         track_boxes.drop(index, inplace=True)
-#                 matched_gt_det_flag = False
-#
-#     FN = results.iloc[results[results['iou'].isnull()].index]
-#     results = results.drop(results[results['iou'].isnull()].index)
-#     results = results.astype({"det_x1": "int", "det_y1": "int", "det_x2": "int", "det_y2": "int", "iou": "float"})
-#     return results, det_boxes, FN, tracker_object_match
-
-
-#
-# def match_detection_gt_by_distance(gt_boxes, det_boxes):
-#     results = define_new_columns(gt_boxes)
-#     break_flag = False
-#     det_boxes.reset_index(inplace=True)
-#     for frame_id in gt_boxes.frame_id.unique():
-#         for i, gt_box in gt_boxes[gt_boxes.frame_id == frame_id].iterrows():
-#             best_iou = 0
-#             for j, det_box in det_boxes[det_boxes.frame_id == frame_id].iterrows():
-#                 if not det_boxes[det_boxes.frame_id == frame_id].empty:
-#                     iou, _ = bb_iou_score(gt_box[["x1", "y1", "x2", "y2"]], det_box[["x1", "y1", "x2", "y2"]])
-#                     if iou > best_iou:
-#                         results.loc[
-#                             results["Unnamed: 0"] == gt_box["Unnamed: 0"], ["det_class", "det_x1", "det_y1", "det_x2",
-#                                                                             "det_y2", "iou"]] = [
-#                             *det_box[["class", "x1", "y1", "x2", "y2"]].values, iou]
-#                         break_flag = True
-#                         break
-#             if break_flag:
-#                 det_boxes = det_boxes.drop(det_box["index"])
-#                 break_flag = False
-#
-#     FN = results.iloc[results[results['iou'].isnull()].index]
-#     results = results.drop(results[results['iou'].isnull()].index)
-#     results = results.astype({"det_x1": "int", "det_y1": "int", "det_x2": "int", "det_y2": "int", "iou": "float"})
-#     return results, det_boxes, FN
-
-
 def define_new_columns(data,general_columns):
     data.loc[:,general_columns]=None
     data.loc[:, "det_class"] = None
@@ -577,8 +492,6 @@ def define_new_columns(data,general_columns):
 def define_options(args):
     if args.nx_ip != None:
         opt.set("nx_ip", args.nx_ip)
-    if args.flow_id != None:
-        opt.set("flow_id", args.flow_id)
     if args.video_context_id != None:
         opt.set("video_context_id", args.video_context_id)
     if args.create_video != None:
@@ -653,61 +566,61 @@ def main():
 
     else:
         # results = pd.read_csv(f"results/{opt.video_context_id}_report.csv")
-
+        results=pd.read_csv(f"results/{opt.video_context_id}_detector_report.csv")
         frame_width = 640
         frame_height = 512
         frames_folder = f"data/{opt.video_context_id}/"
 
-    if opt.create_video:
-        print("Creating Video..")
-        vid_fps = 15.0
-        gt_color = (0, 255, 0)
-        det_color = (255, 0, 0)
-        fn_color = (255, 255, 0)
-        fp_color = (255, 0, 100)
-        out = cv2.VideoWriter(f'results/{opt.video_context_id}.avi',
-                              cv2.VideoWriter_fourcc('M', 'J', 'P', 'G'),
-                              vid_fps,
-                              (frame_width, frame_height))
-
-        for frame_name in tqdm(sorted(os.listdir(frames_folder)), desc="Creating Video.. "):
-            frame = cv2.imread(f"{frames_folder}{frame_name}")
-            # print(f"{frames_folder}{frame_name}")
-            frame_ind = int(frame_name.split(".")[0])
-
-            # Saving the gt and detections results for frame_num
-            results_in_frame = results[results.frame_id == frame_ind]
-
-            cv2.putText(frame, f"{frame_name}",
-                        (0 + 20, 0 + 20),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)  # drawing IOU score per image
-
-            for i, row in results_in_frame[results_in_frame.detection_category == "TP"].iterrows():
-                cv2.rectangle(frame, (int(row.x1), int(row.y1)), (int(row.x2), int(row.y2)), gt_color, 2)
-                if not (pd.isna(row.track_x1) and pd.isna(row.track_y1) and pd.isna(row.track_x2) and pd.isna(
-                        row.track_y2)):
-                    cv2.rectangle(frame, (int(row.track_x1), int(row.track_y1)), (int(row.track_x2), int(row.track_y2)),
-                                  (100, 200, 255), 2)
-                cv2.rectangle(frame, (int(row.det_x1), int(row.det_y1)), (int(row.det_x2), int(row.det_y2)), det_color,
-                              2)
-                cv2.putText(frame, "IoU: {:.2f}".format(row.iou),
-                            (int(row.det_x1) - 20, int(row.det_y1) - 20),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, det_color, 2)  # drawing IOU score per image
-                cv2.putText(frame, "{}".format(row.track_id),
-                            (int(row.det_x1) - 20, int(row.det_y1) - 40),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (100, 200, 255), 2)  # drawing IOU score per image
-            for i, row in results_in_frame[results_in_frame.detection_category == "FP"].iterrows():
-                cv2.rectangle(frame, (int(row.det_x1), int(row.det_y1)), (int(row.det_x2), int(row.det_y2)), fp_color,
-                              2)
-            #
-            for i, row in results_in_frame[results_in_frame.detection_category == "FN"].iterrows():
-                cv2.rectangle(frame, (int(row.x1), int(row.y1)), (int(row.x2), int(row.y2)), fn_color, 2)
-
-            out.write(frame)
-
-        out.release()
-        # Closes all the frames
-        cv2.destroyAllWindows()
+    # if opt.create_video:
+    #     print("Creating Video..")
+    #     vid_fps = 15.0
+    #     gt_color = (0, 255, 0)
+    #     det_color = (255, 0, 0)
+    #     fn_color = (255, 255, 0)
+    #     fp_color = (255, 0, 100)
+    #     out = cv2.VideoWriter(f'results/{opt.video_context_id}.avi',
+    #                           cv2.VideoWriter_fourcc('M', 'J', 'P', 'G'),
+    #                           vid_fps,
+    #                           (frame_width, frame_height))
+    #
+    #     for frame_name in tqdm(sorted(os.listdir(frames_folder)), desc="Creating Video.. "):
+    #         frame = cv2.imread(f"{frames_folder}{frame_name}")
+    #         # print(f"{frames_folder}{frame_name}")
+    #         frame_ind = int(frame_name.split(".")[0])
+    #
+    #         # Saving the gt and detections results for frame_num
+    #         results_in_frame = results[results.frame_id == frame_ind]
+    #
+    #         cv2.putText(frame, f"{frame_name}",
+    #                     (0 + 20, 0 + 20),
+    #                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)  # drawing IOU score per image
+    #
+    #         for i, row in results_in_frame[results_in_frame.match_type == "TP"].iterrows():
+    #             cv2.rectangle(frame, (int(row.x1), int(row.y1)), (int(row.x2), int(row.y2)), gt_color, 2)
+    #             # if not (pd.isna(row.track_x1) and pd.isna(row.track_y1) and pd.isna(row.track_x2) and pd.isna(
+    #             #         row.track_y2)):
+    #             #     cv2.rectangle(frame, (int(row.track_x1), int(row.track_y1)), (int(row.track_x2), int(row.track_y2)),
+    #             #                   (100, 200, 255), 2)
+    #             cv2.rectangle(frame, (int(row.det_x1), int(row.det_y1)), (int(row.det_x2), int(row.det_y2)), det_color,
+    #                           2)
+    #             cv2.putText(frame, "IoU: {:.2f}".format(row.iou),
+    #                         (int(row.det_x1) - 20, int(row.det_y1) - 20),
+    #                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, det_color, 2)  # drawing IOU score per image
+    #             # cv2.putText(frame, "{}".format(row.track_id),
+    #             #             (int(row.det_x1) - 20, int(row.det_y1) - 40),
+    #             #             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (100, 200, 255), 2)  # drawing IOU score per image
+    #         # for i, row in results_in_frame[results_in_frame.match_type == "FP"].iterrows():
+    #         #     cv2.rectangle(frame, (int(row.det_x1), int(row.det_y1)), (int(row.det_x2), int(row.det_y2)), fp_color,
+    #         #                   2)
+    #         # #
+    #         for i, row in results_in_frame[results_in_frame.match_type == "FN"].iterrows():
+    #             cv2.rectangle(frame, (int(row.x1), int(row.y1)), (int(row.x2), int(row.y2)), fn_color, 2)
+    #
+    #         out.write(frame)
+    #
+    #     out.release()
+    #     # Closes all the frames
+    #     cv2.destroyAllWindows()
 
 
 if __name__ == "__main__":

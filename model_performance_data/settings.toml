@@ -1,10 +1,10 @@
-nx_ip = "172.12.10.24"
-flow_id = "mwir" # TODO AUTOMATE
+nx_ip = "172.12.10.28"
+#flow_id = "__" #
 create_video = false
 generate = true
 video_context_id = [
     #"EinYahav_Sbpalmfield_D20211109_Pn2_SSummer_N00076_CtUninhabited_H015_LcSunlight_Ds03000_LtNone_LfPlateaus_VrScrubs_StStaged_LdTopLight_P00_V00_Mc00_B00_Js00_Dr00_T30_TsTrainVald_Set000_flir",
 #    "HavatHabaron_D20210824_Pn2_SSummer_N00082_CtUrban_H080_LcDeepTwilight_Ds06000_LtNone_LfPlateaus_VrScrubs_StNatural_LdSideLight_B00_V10_Js00_P00_T25_MWIR_unknown-8bit"
-    "HavatHabaron_D20210824_Pn2_SSummer_N00082_CtUrban_H080_LcDeepTwilight_Ds06000_LtNone_LfPlateaus_VrScrubs_StNatural_LdSideLight_B00_V10_Js00_P00_T25_flir"
+     "HavatHabaron_D20210824_Pn2_SSummer_N00082_CtUrban_H080_LcDeepTwilight_Ds06000_LtNone_LfPlateaus_VrScrubs_StNatural_LdSideLight_B00_V10_Js00_P00_T25_MWIR_unknown-8bit"
 ]
 # EinYahav_Sbnearroad_D20211109_Pn2_SSummer_N00051_CtUninhabited_H015_LcFullDaylight_Ds00550_LtNone_LfPlateaus_VrDesert_StTrainVald_LdTopLight_P09_V00_Mc00_B00_Js00_Dr00_T30_TsTrainVald_Set000_rgb
