@@ -4,7 +4,7 @@
 #include <condition_variable>
 #include <iostream>
 #include <thread>
-
+#include <opencv2/opencv.hpp>
 #include <opencv2/videoio.hpp>
 
 #include <string>
@@ -136,6 +136,7 @@ void run(
     const char* a_strVideoPath,
     //const string a_strVideoPath,
     const string flow,
+    const string terrain,
     const string pixel_avg,
     const string pixel_std,
     const string bit)
@@ -186,17 +187,76 @@ void run(
 //    startConfiguration.getDetector().appendPixelValueStandardDeviation(0.053f); // uncomment to change detector pixel value standard deviation
     //startConfiguration.getRangeEstimator().getWorldObjectSize(0).setHeightInMeters(1.75f); // uncomment to change the height of person
     //startConfiguration.getTrackerRate().setOutputFramerate(30); // uncomment to change the output framerate
-    if(flow == "rgb")
-        startConfiguration.getFlowSwitcher().setFlowId(sdk::FlowSwitcherFlowId::GroundRgbAndSwir);
-    else
-        startConfiguration.getFlowSwitcher().setFlowId(sdk::FlowSwitcherFlowId::GroundMwir);
-    if (stod(pixel_avg)!=0)
-    {
-        startConfiguration.getGroundMwirDetector().appendAveragePixelValue(stod(pixel_avg));
-        startConfiguration.getGroundMwirDetector().appendPixelValueStandardDeviation(stod(pixel_std));
+
+    sdk::PixelFormat image_decode=sdk::PixelFormat::RGB8;
+    if (flow =="rgb" || flow == "vis"){
+        if (terrain=="ground"){
+            startConfiguration.getFlowSwitcher().setFlowId(sdk::FlowSwitcherFlowId::GroundRgbAndSwir);
+//            image_decode=sdk::PixelFormat::RGB8;
+            if (bit=="16"){
+                image_decode=sdk::PixelFormat::RGB16;
+            }
+            if (stod(pixel_avg)!=-1){
+                startConfiguration.getGroundRgbSwirDetector().appendAveragePixelValue(stod(pixel_avg));
+                startConfiguration.getGroundRgbSwirDetector().appendPixelValueStandardDeviation(stod(pixel_std));
+            }
         }
-//    startConfiguration.getGroundMwirDetector().appendAveragePixelValue(0.425818);
-//    startConfiguration.getGroundMwirDetector().appendPixelValueStandardDeviation(0.00712599);
+        else {
+                cout << "Error: There is no Sea+RGB flow " << endl;
+                exit(1);
+        }
+    }
+    else if (flow =="swir"){
+        if (terrain=="ground"){
+            startConfiguration.getFlowSwitcher().setFlowId(sdk::FlowSwitcherFlowId::GroundRgbAndSwir);
+            image_decode=sdk::PixelFormat::GRAY8;
+            if (bit=="16"){
+                image_decode=sdk::PixelFormat::GRAY16;
+            }
+            if (stod(pixel_avg)!=-1){
+                startConfiguration.getGroundRgbSwirDetector().appendAveragePixelValue(stod(pixel_avg));
+                startConfiguration.getGroundRgbSwirDetector().appendPixelValueStandardDeviation(stod(pixel_std));
+            }
+        }
+        else {
+                startConfiguration.getFlowSwitcher().setFlowId(sdk::FlowSwitcherFlowId::SeaSwir);
+                image_decode=sdk::PixelFormat::GRAY8;
+                if (bit=="16"){
+                    image_decode=sdk::PixelFormat::GRAY16;
+                }
+                if (stod(pixel_avg)!=-1){
+                    startConfiguration.getSeaSwirDetector().appendAveragePixelValue(stod(pixel_avg));
+                    startConfiguration.getSeaSwirDetector().appendPixelValueStandardDeviation(stod(pixel_std));
+                }
+        }
+    }
+    else if (flow == "mwir" || flow == "lwir" ){
+
+        if (terrain=="ground"){
+            startConfiguration.getFlowSwitcher().setFlowId(sdk::FlowSwitcherFlowId::GroundMwir);
+            image_decode=sdk::PixelFormat::GRAY8;
+            if (bit=="16"){
+
+                image_decode=sdk::PixelFormat::GRAY16;
+            }
+            if (stod(pixel_avg)!=-1){
+
+                startConfiguration.getGroundMwirDetector().appendAveragePixelValue(stod(pixel_avg));
+                startConfiguration.getGroundMwirDetector().appendPixelValueStandardDeviation(stod(pixel_std));
+            }
+        }
+        else {
+                startConfiguration.getFlowSwitcher().setFlowId(sdk::FlowSwitcherFlowId::SeaMwir);
+                image_decode=sdk::PixelFormat::GRAY8;
+                if (bit=="16"){
+                    image_decode=sdk::PixelFormat::GRAY16;
+                }
+                if (stod(pixel_avg)!=-1){
+                    startConfiguration.getSeaMwirDetector().appendAveragePixelValue(stod(pixel_avg));
+                    startConfiguration.getSeaMwirDetector().appendPixelValueStandardDeviation(stod(pixel_std));
+                }
+        }
+    }
 
     std::shared_ptr<sdk::Stream> pStream = pPipeline->startStream(
         startConfiguration);
@@ -215,19 +275,21 @@ void run(
     // push raw video frames
     cv::VideoCapture capture(
         a_strVideoPath);
-    // /home/chen/PycharmProjects/qa-scripts/model_performance_data/data/AshdodPort_D20210802_Pn2_SSummer_N00096_CtNone_H035_LcSunlight_Ds02500_LtCalm_LfSea_VrNone_StStaged_LdFrontLight_B02_V00_Js02_P07_T28_MWIR_unknown-8bit/%05d.png
     uint32_t nFrameId = 0;
-    cv::Mat  matFrame;
-    sdk::PixelFormat image_decode=sdk::PixelFormat::BGR8;
-
-    if (bit=="16" && flow != "rgb"){
-       image_decode=sdk::PixelFormat::GRAY16;
-        }
-        std::cout << "Im here ::: " << matFrame.step[0] << std::endl;
+    cv::Mat  matFrame(640,512,CV_16UC1);
 
     while (capture.read(matFrame))
     {
+        if (image_decode==sdk::PixelFormat::RGB16 || image_decode==sdk::PixelFormat::RGB8 ){
+            cv::cvtColor(matFrame, matFrame, cv::COLOR_BGR2RGB);
+        }
+        else {
 
+            cv::cvtColor(matFrame, matFrame, cv::COLOR_BGR2GRAY);
+        }
+        if (image_decode==sdk::PixelFormat::GRAY16){
+            matFrame.convertTo(matFrame, CV_16U,255);
+        }
 
         // push frame
         pStream->pushRawFrame(
@@ -281,7 +343,7 @@ int main(int argc, char** argv)
         std::cout << info.HostName.toString() << " " << info.IP.toString() << ":" << info.Port << std::endl;
     }
 
-    if (argc != 8)
+    if (argc != 9)
 //    if (argc != 3)
     {
         std::cerr << "Syntax: ./sdk_sample server_ip frames_folder_path flow_id output_csv_path mean_normalization std_normalization" << std::endl;
@@ -291,11 +353,12 @@ int main(int argc, char** argv)
 
     std::string flow = static_cast<std::string>(argv[3]);
     changeToLower(flow);
+    std::string terrain = static_cast<std::string>(argv[4]);
 
-    std::string csv_output_path = static_cast<std::string>(argv[4]);
-    std::string pixel_avg = static_cast<std::string>(argv[5]);
-    std::string pixel_std = static_cast<std::string>(argv[6]);
-    std::string bit = static_cast<std::string>(argv[7]);
+    std::string csv_output_path = static_cast<std::string>(argv[5]);
+    std::string pixel_avg = static_cast<std::string>(argv[6]);
+    std::string pixel_std = static_cast<std::string>(argv[7]);
+    std::string bit = static_cast<std::string>(argv[8]);
 
 
     std::cout <<"mean "<< pixel_avg<< std::endl;
@@ -317,7 +380,7 @@ int main(int argc, char** argv)
 
     try
     {
-        run(argv[1], argv[2], flow,pixel_avg, pixel_std,bit);
+        run(argv[1], argv[2], flow,terrain, pixel_avg, pixel_std,bit);
 //        run(
 //            argv[1],
 //            argv[2]);

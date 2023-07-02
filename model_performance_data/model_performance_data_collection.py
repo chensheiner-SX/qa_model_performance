@@ -31,7 +31,7 @@ tracker_metrics = ['idf1', 'idp', 'idr', 'recall', 'precision', 'num_unique_obje
 general_columns_names = ['context_id', 'video_gk', 'bits', 'source_path',
                          'video_name', 'sky_condition', 'light_condition',
                          'light_intensity', 'landform', 'frame_shape_w', 'frame_shape_h', 'payload_code',
-                         'wavelength_code', 'wavelength']
+                         'wavelength_code', 'wavelength', 'sensor_terrain', 'target_terrain']
 
 
 # ['num_frames', 'obj_frequencies', 'pred_frequencies', 'num_matches', 'num_switches', 'num_transfer',
@@ -48,6 +48,16 @@ def parse_args():
     parser.add_argument("--create_video", required=False)
     return parser.parse_args()
 
+def add_info_to_fail_file(video_id,reason):
+    failed_file="failed_videos.csv"
+    if os.path.exists(failed_file):
+        data=pd.read_csv(failed_file)
+        data.iloc[len(data)]=[video_id,reason]
+        data.to_csv(failed_file)
+    else:
+        data=pd.DataFrame(columns=["video_context_id","reason"])
+        data.iloc[len(data)] = [video_id, reason]
+        data.to_csv(failed_file)
 
 def get_class_codes(db_client):
     quarry = """
@@ -90,29 +100,41 @@ def clean_data_gt(gt, db_client):
     return gt
 
 
-def get_data_no_context_id(video_id, client):
+def get_data_no_context_id(video_id,gk, client):
     query = """ 
                 SELECT dwh.objects.class_code,dwh.objects.subclass_code,
                 dwh.objects.coordinates,dwh.objects.frame_id,
                 dwh.objects.video_gk, 
                 dwh.videos.source_path,
                 dwh.objects.object_id,
-                dwh.videos.video_name
+                dwh.videos.video_name,
+                dwh.videos.bits,
+                dwh.videos.payload_code,
+                dwh.videos.wavelength_code,
+                dwh.get_desc('wavelength',wavelength_code) as wavelength,
+                dwh.get_desc('sky_condition',sky_condition_code) as sky_condition,
+                dwh.get_desc('light_condition',light_condition_code) as light_condition,
+                dwh.get_desc('light_intensity',light_intensity_code) as light_intensity,
+                dwh.get_desc('landform',landform_code) as landform,
+                dwh.get_desc('sensor_terrain',sensor_terrain_code) as sensor_terrain,
+                dwh.get_desc('target_terrain',target_terrain_code) as target_terrain
                 
                 FROM (dwh.videos
                 INNER JOIN dwh.objects ON dwh.videos.video_gk = dwh.objects.video_gk)
                 
                 
-                where dwh.videos.video_name='video_context_id'
+                where dwh.videos.video_gk='video_gk_id'
                 and dwh.objects.shape_code=1
                 order by frame_id
 
                 """
     print("Getting GT data from Database using video name")
-    query_gt = query.replace("video_context_id", video_id)
+    query_gt = query.replace("video_gk_id", str(gk))
 
     data_gt = client.sql_query_db(query_gt)
-    assert not data_gt.empty, f"No GT file in Database of name: {video_id}"
+    if data_gt.empty:
+        print(f"No GT file in Database of name: {video_id}")
+        add_info_to_fail_file(opt.video_context_id,f"No GT file in Database of name: {video_id}")
     data_gt.loc[:, "context_id"] = video_id
     return data_gt
 
@@ -121,6 +143,20 @@ def get_data(video_id):
     db_creds = {'user': 'chen-sheiner', 'password': '4kWY05mQQiRcr4BCFqG5',
                 'host': 'database-poc.cgkbiipjug0o.eu-west-1.rds.amazonaws.com', 'db_name': 'SXDBPROD'}
     db_client = DB_Client(db_creds)
+    gk_querry="""
+    SELECT distinct video_gk, context_id
+    from dwh.allegro_videos
+    where context_id='video_context_id'
+    """
+    gk_querry = gk_querry.replace("video_context_id", video_id)
+    gk_data = db_client.sql_query_db(gk_querry)
+    if gk_data.empty:
+        print(f"No Video in allegro_videos : {video_id}")
+        add_info_to_fail_file(video_id, "Video Doesnt Exist in Allegro_videos")
+        return None
+
+    gk=gk_data.video_gk[0]
+    print(f"Gathering GT of Video GK: {gk}")
     query = """ 
             SELECT dwh.objects.class_code,dwh.objects.subclass_code,
             dwh.objects.coordinates,dwh.objects.frame_id,
@@ -136,14 +172,16 @@ def get_data(video_id):
             dwh.get_desc('sky_condition',sky_condition_code) as sky_condition,
             dwh.get_desc('light_condition',light_condition_code) as light_condition,
             dwh.get_desc('light_intensity',light_intensity_code) as light_intensity,
-            dwh.get_desc('landform',landform_code) as landform
+            dwh.get_desc('landform',landform_code) as landform,
+            dwh.get_desc('sensor_terrain',sensor_terrain_code) as sensor_terrain,
+			dwh.get_desc('target_terrain',target_terrain_code) as target_terrain
             
             FROM ((dwh.allegro_videos
             
             INNER JOIN dwh.objects ON dwh.allegro_videos.video_gk = dwh.objects.video_gk)
             INNER JOIN dwh.videos ON dwh.allegro_videos.video_gk = dwh.videos.video_gk )
             
-            where dwh.allegro_videos.context_id='video_context_id'
+            where dwh.videos.video_gk='video_gk_id'
             and dwh.objects.shape_code=1
             order by frame_id
             """
@@ -152,12 +190,12 @@ def get_data(video_id):
 
     if not os.path.exists(f"{os.getcwd()}/data/GT/{video_id}.csv"):
         print("Getting GT data from Database")
-        query_gt = query.replace("video_context_id", video_id)
+        query_gt = query.replace("video_gk_id", str(gk))
 
         data_gt = db_client.sql_query_db(query_gt)
         if data_gt.empty:
             print(f"No GT file in Database of context id: {video_id}")
-            data_gt = get_data_no_context_id(video_id, db_client)
+            data_gt = get_data_no_context_id(video_id,gk, db_client)
         data_gt = clean_data_gt(data_gt, db_client)
         data_gt.to_csv(f"{os.getcwd()}/data/GT/{video_id}.csv")
         data_gt = pd.read_csv(f"{os.getcwd()}/data/GT/{video_id}.csv")
@@ -169,15 +207,17 @@ def get_data(video_id):
 
 def get_box_from_gt_csv():
     data_gt = get_data(opt.video_context_id)
+    if data_gt is None:
+        return None,None
     data_gt.coordinates = data_gt.coordinates.apply(eval)  # TODO add rename to motorcycle to two-wheel subclass
     data_gt.coordinates = data_gt.coordinates.apply(lambda x: np.concatenate(x[0:3:2]))
     data_gt[["x1", "y1", "x2", "y2"]] = pd.DataFrame(data_gt.coordinates.tolist(), index=data_gt.index)
     data_gt[["x1", "y1", "x2", "y2"]] = data_gt[["x1", "y1", "x2", "y2"]].astype(int)
-    # assert "data-lake-production-source" not in data_gt.source_path[0], ["Data is in S3 Bucket that i dont have access to, data-lake-production-source ",data_gt.source_path[0]]
     return data_gt, data_gt.source_path[0:1]
 
 
 def clean_gt_boxes(gt_boxes, frames_folder):
+
     drop_indx = gt_boxes[gt_boxes.class_name == "dilemma_zone"].index
     gt_boxes = gt_boxes.drop(drop_indx, errors='ignore')
     gt_boxes.drop(columns="index", inplace=True, errors='ignore')
@@ -193,7 +233,9 @@ def clean_gt_boxes(gt_boxes, frames_folder):
     gt_boxes["frame_shape_h"] = frame_height
 
     general_data = gt_boxes[general_columns_names].drop_duplicates()
-    assert general_data.shape[0] == 1, "Video configuration change mid video"
+    if general_data.shape[0] != 1:
+        print("Video configuration change mid video")
+        add_info_to_fail_file(opt.video_context_id,"Video configuration change mid video")
     gt_boxes.drop(columns=general_columns_names, inplace=True, errors='ignore')
     return gt_boxes, general_data
 
@@ -204,14 +246,14 @@ def download_frames(urls):
         if isinstance(url, str):
             bucket = url.split("//")[1].split("/")[0]
             key = url.split("//")[1].split(bucket)[1]
-            folder_name = key.split("/")[-1]
-            os.makedirs(f"data/{folder_name}/", exist_ok=True)
+            # folder_name = key.split("/")[-1]
+            os.makedirs(f"data/{opt.video_context_id}/", exist_ok=True)
             files_list = s3.get_files_in_folder(bucket, key[1:])
             for file in tqdm(files_list, desc="Downloading Frames"):
-                if not os.path.exists(f"data/{folder_name}/{file.split('/')[-1]}"):  # if file exist don't download it
+                if not os.path.exists(f"data/{opt.video_context_id}/{file.split('/')[-1]}"):  # if file exist don't download it
                     s3.download_file(bucket, file,
-                                     f"data/{folder_name}/{file.split('/')[-1]}")  # TODO add functionality to download whole folder and not just file as expeced now
-    return f"data/{folder_name}/"
+                                     f"data/{opt.video_context_id}/{file.split('/')[-1]}")
+    return f"data/{opt.video_context_id}/"
 
 
 def clean_tracker_data(data):
@@ -219,78 +261,77 @@ def clean_tracker_data(data):
         data[["x1", "y1", "x2", "y2"]] = data[["x1", "y1", "x2", "y2"]].astype(pd.Int32Dtype())
     except Exception as e:
         print("Tracker  File Has Empty lines:", e)
-    # data = data[data.score > 0]
     data = data[data[["x1", "y1", "x2", "y2"]].sum(axis=1) > 0]
     return data
 
 
-def generate_tracker_csv(ip, video_path, flow_id, output_csv_path, pixel_mean, pixel_std, bit):
-    if not os.path.exists(output_csv_path):
+def generate_tracker_csv(ip, video_path, flow_id, terrain, output_csv_path, pixel_mean, pixel_std, bit):
+    if not os.path.exists(output_csv_path) or os.stat(output_csv_path).st_size < 700:
+        print(f"{ip} {video_path} {flow_id} {terrain} {output_csv_path} {pixel_mean} {pixel_std} {bit}")
         start = perf_counter()
         os.system(
-            f"single_frame/./sdk_sample_raw_frames {ip} {video_path} {flow_id} {output_csv_path} {pixel_mean} {pixel_std} {bit}")
+            f"single_frame/./sdk_sample_raw_frames {ip} {video_path} {flow_id} {terrain} {output_csv_path} {pixel_mean} {pixel_std} {bit}")
         print("Tracker time:", perf_counter() - start)
     else:
         print("Tracker CSV Already Exist")
-        if os.stat(output_csv_path).st_size < 10:
-            print("Trying to Create Tracker File again")
-            os.system(
-                f"single_frame/./sdk_sample_raw_frames {ip} {video_path} {flow_id} {output_csv_path} {pixel_mean} {pixel_std} {bit}")
+    # If file is lower than 700 B than its empty and the script runs the SDK again
+    if os.stat(output_csv_path).st_size < 700:
+        print("Trying to Create Tracker File again")
+        os.system(
+            f"single_frame/./sdk_sample_raw_frames {ip} {video_path} {flow_id} {terrain} {output_csv_path} {pixel_mean} {pixel_std} {bit}")
 
 
-def generate_detections_csv(ip, video_path, flow_id, output_csv_path, pixel_mean, pixel_std, bit):
-    if not os.path.exists(output_csv_path):
+def generate_detections_csv(ip, video_path, flow_id, terrain ,output_csv_path, pixel_mean, pixel_std, bit):
+    if not os.path.exists(output_csv_path) or os.stat(output_csv_path).st_size < 700:
         start = perf_counter()
         os.system(
-            f"single_frame/./sdk_sample_single_frame {ip} {video_path} {flow_id} {output_csv_path} {pixel_mean} {pixel_std} {bit}")
+            f"single_frame/./sdk_sample_single_frame {ip} {video_path} {flow_id} {terrain} {output_csv_path} {pixel_mean} {pixel_std} {bit}")
         print("Detections time:", perf_counter() - start)
     else:
         print("Detections CSV Already Exist")
-        if os.stat(output_csv_path).st_size < 10:
-            print("Trying to Create Detection File again")
-            os.system(
-                f"single_frame/./sdk_sample_single_frame {ip} {video_path} {flow_id} {output_csv_path} {pixel_mean} {pixel_std} {bit}")
+    # If file is lower than 700 B than its empty and the script runs the SDK again
+    if os.stat(output_csv_path).st_size < 700:
+        print("Trying to Create Detection File again")
+        os.system(
+            f"single_frame/./sdk_sample_single_frame {ip} {video_path} {flow_id} {terrain} {output_csv_path} {pixel_mean} {pixel_std} {bit}")
 
 
-def get_box_from_detection_csv(urls, norm_values, flow):
-    frames_folder = download_frames(urls)
-    # frames_folder = '/home/chen/PycharmProjects/qa-scripts/model_performance_data/data/RitzCarltonHerzliya_D20210706_Pn8_SSummer_N00027_CtNone_H030_LcFullDaylight_Ds01500_LtNone_LfDunes_VrNone_StNatural_LdBackLight_B00_V00_Js00_P15_T30_MWIR_unknown-8bit'
+def get_box_from_detection_csv(norm_values, flow,terrain,bit, run_detector=True):
     video_path = opt.video_context_id
     if not video_path.endswith('/'):
         video_path += '/'
     video_path = f"{os.getcwd()}/data/{video_path}"
     extension = os.listdir(video_path)[0].split(".")[1]
-    # print(f"extention of images:{extension}")
-
-    csv_path_detection = f"{os.getcwd()}/data/detections/{opt.video_context_id}_detections.csv"
-    csv_path_tracker = f"{os.getcwd()}/data/trackers/{opt.video_context_id}_tracker.csv"
-    bit = "8"
+    print(f"extention of images:{extension}")
     try:
-        if "8bit" in video_path:
-            values = norm_values.loc['8']
-        else:
-            bit = "16"
-            values = norm_values.loc['16']
+        values = norm_values.loc[bit]
+
     except KeyError:
         print("no correct type of compression in normalization-values database.")
-        print("using the first configuration as values:", norm_values.iloc[:1])
+        print("using the first configuration as values:\n", norm_values.iloc[:1])
         values = norm_values.iloc[0]
-    generate_detections_csv(opt.nx_ip, video_path, flow, csv_path_detection, values[0], values[1], bit)
-    sleep(5)
-    video_path += f"%05d.{extension}"
-    generate_tracker_csv(opt.nx_ip, video_path, flow, csv_path_tracker, values[0], values[1], bit)
-    assert os.path.exists(csv_path_detection) and os.stat(
-        csv_path_detection).st_size > 10, "Detection File Creation Failed"
-    assert os.path.exists(csv_path_tracker) and os.stat(csv_path_tracker).st_size > 10, "Tracker File Creation Failed"
-    detections_data = pd.read_csv(csv_path_detection)
-    tracker_data = pd.read_csv(csv_path_tracker)
-    tracker_data = clean_tracker_data(tracker_data)
-    try:
-        detections_data[["x1", "y1", "x2", "y2"]] = detections_data[["x1", "y1", "x2", "y2"]].astype(pd.Int32Dtype())
-    except Exception as e:
-        print("Detection File Has Empty lines:", e)
 
-    return detections_data, tracker_data, frames_folder
+    if run_detector:
+        csv_path_detection = f"{os.getcwd()}/data/detections/{opt.video_context_id}_detections.csv"
+        generate_detections_csv(opt.nx_ip, video_path, flow, terrain, csv_path_detection, values[0], values[1], bit)
+        if  not os.path.exists(csv_path_detection) or os.stat(csv_path_detection).st_size <= 700:
+            print("Detection File Creation Failed")
+            add_info_to_fail_file(opt.video_context_i,"Detection File Creation Failed")
+            return None
+        detections_data = pd.read_csv(csv_path_detection)
+        return detections_data
+
+    else:
+        csv_path_tracker = f"{os.getcwd()}/data/trackers/{opt.video_context_id}_tracker.csv"
+        video_path += f"%05d.{extension}"
+        generate_tracker_csv(opt.nx_ip, video_path, flow, terrain, csv_path_tracker, values[0], values[1], bit)
+        if not os.path.exists(csv_path_tracker) or os.stat(csv_path_tracker).st_size <= 700:
+            print("Detection File Creation Failed")
+            add_info_to_fail_file(opt.video_context_i, "Detection File Creation Failed")
+            return None
+        tracker_data = pd.read_csv(csv_path_tracker)
+        tracker_data = clean_tracker_data(tracker_data)
+        return tracker_data
 
 
 def calc_iou(roi1, roi2):
@@ -400,6 +441,8 @@ def create_detection_gt_result(gt_data, det_data, general_data):
         # for iou_threshold in [0.7]:
         result, acc = match_detection_gt_v2(gt_data, det_data, general_data,
                                             iou_threshold=np.round(iou_threshold, decimals=1))
+        if result is None:
+            return None, None
         acc_list.append(acc)
         final_result = pd.concat([final_result, result])
 
@@ -408,7 +451,10 @@ def create_detection_gt_result(gt_data, det_data, general_data):
 
 def match_detection_gt_v2(gt_data, det_data, general_data, iou_threshold=0.5):
     det_data = det_data.dropna(subset=['x1', 'x2', 'y1', 'y2'])
-    assert not det_data.empty, " Model found no detections"
+    if det_data.empty:
+        print("Model found no detections")
+        add_info_to_fail_file(opt.video_context_id,"Model found no detections")
+        return None , None
     gt_data["h"] = gt_data.apply(lambda x: int(x["y2"] - x["y1"]), axis=1)
     gt_data["w"] = gt_data.apply(lambda x: int(x["x2"] - x["x1"]), axis=1)
     gt_data["gt_area"] = gt_data["w"] * gt_data["h"]
@@ -489,15 +535,9 @@ def define_new_columns(data, general_columns):
     data.loc[:, "det_x2"] = None
     data.loc[:, "det_y2"] = None
     data.loc[:, "det_area"] = None
-    # data.loc[:, "track_x1"] = None
-    # data.loc[:, "track_y1"] = None
-    # data.loc[:, "track_x2"] = None
-    # data.loc[:, "track_y2"] = None
-    # data.loc[:, "det_score"] = None
     data.loc[:, "iou"] = None
     data.loc[:, "distance"] = None
     data.loc[:, "match_type"] = None
-    # data.loc[:, "track_id"] = None
     return data
 
 
@@ -538,49 +578,65 @@ def main():
 
         # getting the ground-truth boxes from csv, the format is {frame_id: [(class,x1,y1,x2,y2), ... ] }
         gt_boxes, frames_urls = get_box_from_gt_csv()
+        if gt_boxes is None:
+            return
+        if gt_boxes.sensor_terrain[0] == 'air':
+            print("Merlin SDK isnt implemented yet!")
+            add_info_to_fail_file(opt.video_context_id, "Merlin SDK isnt implemented yet!")
+            return
 
-        # getting the detection boxes from csv, the format is {frame_id: [(class,x1,y1,x2,y2), ... ] }
+            # getting the detection boxes from csv, the format is {frame_id: [(class,x1,y1,x2,y2), ... ] }
         norm_data = get_normalization_data(gt_boxes.payload_code[0], gt_boxes.wavelength_code[0])
         flow = gt_boxes.wavelength[0]
-        print(f"Video's Flow is: {flow}\n")
-        detect_boxes, tracker_boxes, frames_folder = get_box_from_detection_csv(frames_urls, norm_data, flow)
+        print(f"\nVideo's Flow is: {flow}")
+        bit = gt_boxes.bits[0]
+        print(f"Video's Bit is: {bit}")
+        terrain = gt_boxes.target_terrain[0]
+        print(f"Video's Terrain is: {terrain}\n")
+
+        # Make sure / Download frames of the chosen video
+        frames_folder = download_frames(frames_urls)
 
         # getting rid of "dilemma_zone" annotations
         gt_boxes, general_data = clean_gt_boxes(gt_boxes, frames_folder)
 
-        # gt_boxes["gt_bb_w"] = gt_boxes["x2"] - gt_boxes["x1"]
-        # gt_boxes["gt_bb_h"] = gt_boxes["y2"] - gt_boxes["y1"]
-        # gt_boxes["gt_bb_area"] = gt_boxes["gt_bb_w"] * gt_boxes["gt_bb_h"]
+        if opt.run_sdk in ["both", "detector"]:
+            # Run detector sdk
+            detect_boxes = get_box_from_detection_csv(norm_data, flow, terrain,bit, run_detector=True)
+            if detect_boxes is None:
+                return
+            final_result, acc_list = create_detection_gt_result(gt_boxes, detect_boxes, general_data)
+            if final_result is None:
+                return
+            final_result.to_csv(f"results/{opt.video_context_id}_detector_report.csv")
 
-        # final_result,acc_list = create_detection_gt_result(gt_boxes, detect_boxes,general_data)
-        # final_result.to_csv(f"results/{opt.video_context_id}_detector_report.csv")
+        if opt.run_sdk in ["both", "tracker"]:
+            # Run tracker sdk
+            tracker_boxes = get_box_from_detection_csv(norm_data, flow, terrain,bit, run_detector=False)
+            if tracker_boxes is None:
+                return
+            tracker_report = match_tracker_gt(gt_boxes, tracker_boxes)
+            general_temp = general_data.loc[general_data.index.repeat(len(tracker_report))]
+            general_temp.index = tracker_report.index
+            tracker_report.loc[:, general_columns_names] = general_temp
+            tracker_report.to_csv(f"results/{opt.video_context_id}_tracker_report.csv")
 
-        tracker_report = match_tracker_gt(gt_boxes, tracker_boxes)
-        general_temp = general_data.loc[general_data.index.repeat(len(tracker_report))]
-        general_temp.index = tracker_report.index
-        tracker_report.loc[:, general_columns_names] = general_temp
-        tracker_report.to_csv(f"results/{opt.video_context_id}_tracker_report.csv")
-        #
-        # if os.path.exists(gerneral_report_file):
-        #     general = pd.read_csv(gerneral_report_file, index_col=False)
-        #     # if not general.context_id.unique().__contains__(opt.video_context_id):
-        #     #     print("Adding to General Report...")
-        #     #     pd.concat([general, results], axis=0, ignore_index=True).to_csv(gerneral_report_file, index=False)
-        #     # else:
-        #     #     print("Results already in General Report...")
-        # else:
-        #     print("Creating General Report...")
-        #     results.to_csv(gerneral_report_file)
 
 
     else:
-        # results = pd.read_csv(f"results/{opt.video_context_id}_report.csv")
+        frames_folder = f"data/{opt.video_context_id}/"
+
+    if opt.create_video:
+        print("Creating Video..")
+        vid_fps = 15.0
+        gt_color = (0, 255, 0)
+        det_color = (255, 0, 0)
+        fn_color = (255, 255, 0)
+        fp_color = (255, 0, 100)
+        sleep(1)
         gt = pd.read_csv(f"data/GT/{opt.video_context_id}.csv")
         det = pd.read_csv(f"data/detections/{opt.video_context_id}_detections.csv")
         tracker = pd.read_csv(f"data/trackers/{opt.video_context_id}_tracker.csv")
-        frame_width = 640
-        frame_height = 512
-        frames_folder = f"data/{opt.video_context_id}/"
 
         det = det.dropna()
         tracker = tracker.dropna()
@@ -590,13 +646,10 @@ def main():
         gt[["x1", "y1", "x2", "y2"]] = pd.DataFrame(gt.coordinates.tolist(), index=gt.index)
         gt[["x1", "y1", "x2", "y2"]] = gt[["x1", "y1", "x2", "y2"]].astype(int)
 
-    if opt.create_video:
-        print("Creating Video..")
-        vid_fps = 15.0
-        gt_color = (0, 255, 0)
-        det_color = (255, 0, 0)
-        fn_color = (255, 255, 0)
-        fp_color = (255, 0, 100)
+
+        frame_demo=cv2.imread(f"{frames_folder}/{os.listdir(frames_folder)[0]}")
+        frame_height,frame_width,_ = frame_demo.shape
+
         out = cv2.VideoWriter(f'results/{opt.video_context_id}.avi',
                               cv2.VideoWriter_fourcc('M', 'J', 'P', 'G'),
                               vid_fps,

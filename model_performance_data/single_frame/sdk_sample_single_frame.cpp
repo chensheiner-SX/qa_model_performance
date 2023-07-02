@@ -21,7 +21,6 @@ using namespace std;
 
 //std::string csv_path;
 
-// TODO: add file path as argument,, from where we run the main python script
 ofstream outfile;
 
 struct UserData
@@ -113,6 +112,7 @@ void run(
     const char* a_strServerIP,
     const string a_strFramesPath,
     const string flow,
+    const string terrain,
     const string pixel_avg,
     const string pixel_std,
     const string bit
@@ -154,26 +154,77 @@ void run(
     startConfiguration.getRawSource().setReadTimeoutInSec(5); // disable read timeout. Not needed when using single frame mode.
     startConfiguration.getTracksPublisher().setSourceData(sdk::PublisherDataType::Detections);
 
-    // HavatHabaron_D20210824_Pn2_SSummer_N00005_CtUrban_H080_LcSunlight_Ds01000_LtNone_LfPlateaus_VrScrubs_StNatural_LdBackLight_B00_V01_Js02_P00_T25_flir
-    // mean = 0.409656
-    // std = 0.121233
 
-    // 8bit
-    // mean = 0.417997
-    // std = 0.0325584
-// HavatHabaron_D20210824_Pn2_SSummer_N00082_CtUrban_H080_LcDeepTwilight_Ds06000_LtNone_LfPlateaus_VrScrubs_StNatural_LdSideLight_B00_V10_Js00_P00_T25_flir
-// mean    0.425823
-// std    0.00713729
-
-    if(flow == "rgb")
-        startConfiguration.getFlowSwitcher().setFlowId(sdk::FlowSwitcherFlowId::GroundRgbAndSwir);
-    else
-        startConfiguration.getFlowSwitcher().setFlowId(sdk::FlowSwitcherFlowId::GroundMwir);
-    if (stod(pixel_avg)!=0)
-    {
-        startConfiguration.getGroundMwirDetector().appendAveragePixelValue(stod(pixel_avg));
-        startConfiguration.getGroundMwirDetector().appendPixelValueStandardDeviation(stod(pixel_std));
+    sdk::PixelFormat image_decode=sdk::PixelFormat::RGB8;
+    if (flow =="rgb" || flow == "vis"){
+        if (terrain=="ground"){
+            startConfiguration.getFlowSwitcher().setFlowId(sdk::FlowSwitcherFlowId::GroundRgbAndSwir);
+//            image_decode=sdk::PixelFormat::RGB8;
+            if (bit=="16"){
+                image_decode=sdk::PixelFormat::RGB16;
+            }
+            if (stod(pixel_avg)!=-1){
+                startConfiguration.getGroundRgbSwirDetector().appendAveragePixelValue(stod(pixel_avg));
+                startConfiguration.getGroundRgbSwirDetector().appendPixelValueStandardDeviation(stod(pixel_std));
+            }
         }
+        else {
+                cout << "Error: There is no Sea+RGB flow " << endl;
+                exit(1);
+        }
+    }
+    else if (flow =="swir"){
+        if (terrain=="ground"){
+            startConfiguration.getFlowSwitcher().setFlowId(sdk::FlowSwitcherFlowId::GroundRgbAndSwir);
+            image_decode=sdk::PixelFormat::GRAY8;
+            if (bit=="16"){
+                image_decode=sdk::PixelFormat::GRAY16;
+            }
+            if (stod(pixel_avg)!=-1){
+                startConfiguration.getGroundRgbSwirDetector().appendAveragePixelValue(stod(pixel_avg));
+                startConfiguration.getGroundRgbSwirDetector().appendPixelValueStandardDeviation(stod(pixel_std));
+            }
+        }
+        else {
+                startConfiguration.getFlowSwitcher().setFlowId(sdk::FlowSwitcherFlowId::SeaSwir);
+                image_decode=sdk::PixelFormat::GRAY8;
+                if (bit=="16"){
+                    image_decode=sdk::PixelFormat::GRAY16;
+                }
+                if (stod(pixel_avg)!=-1){
+                    startConfiguration.getSeaSwirDetector().appendAveragePixelValue(stod(pixel_avg));
+                    startConfiguration.getSeaSwirDetector().appendPixelValueStandardDeviation(stod(pixel_std));
+                }
+        }
+    }
+    else if (flow == "mwir" || flow == "lwir" ){
+
+        if (terrain=="ground"){
+            startConfiguration.getFlowSwitcher().setFlowId(sdk::FlowSwitcherFlowId::GroundMwir);
+            image_decode=sdk::PixelFormat::GRAY8;
+            if (bit=="16"){
+
+                image_decode=sdk::PixelFormat::GRAY16;
+            }
+            if (stod(pixel_avg)!=-1){
+
+                startConfiguration.getGroundMwirDetector().appendAveragePixelValue(stod(pixel_avg));
+                startConfiguration.getGroundMwirDetector().appendPixelValueStandardDeviation(stod(pixel_std));
+            }
+        }
+        else {
+                startConfiguration.getFlowSwitcher().setFlowId(sdk::FlowSwitcherFlowId::SeaMwir);
+                image_decode=sdk::PixelFormat::GRAY8;
+                if (bit=="16"){
+                    image_decode=sdk::PixelFormat::GRAY16;
+                }
+                if (stod(pixel_avg)!=-1){
+                    startConfiguration.getSeaMwirDetector().appendAveragePixelValue(stod(pixel_avg));
+                    startConfiguration.getSeaMwirDetector().appendPixelValueStandardDeviation(stod(pixel_std));
+                }
+        }
+    }
+
     std::shared_ptr<sdk::Stream> pStream = pPipeline->startStream(
         startConfiguration);
 
@@ -204,11 +255,9 @@ void run(
 
     outfile << "frame_id,class,x1,y1,x2,y2" << endl;
     int fileCounter = 1;
-    sdk::PixelFormat image_decode=sdk::PixelFormat::RGB8;
 
-    if (bit=="16"){
-       image_decode=sdk::PixelFormat::RGB16;
-        }
+
+
     for (const string& filename : files) {
         string extension;
         size_t dotPos = filename.rfind(".");
@@ -224,8 +273,15 @@ void run(
             exit(1);
         }
 //        std::cout << filePath << std::endl;
-        cv::Mat frame = cv::imread(filePath, cv::IMREAD_ANYDEPTH | cv::IMREAD_ANYCOLOR);
-        cv::cvtColor(frame, frame, cv::COLOR_BGR2RGB);
+        cv::Mat frame = cv::imread(filePath, cv::IMREAD_ANYDEPTH | cv::IMREAD_COLOR );
+
+        if (image_decode==sdk::PixelFormat::RGB16 || image_decode==sdk::PixelFormat::RGB8){
+            cv::cvtColor(frame, frame, cv::COLOR_BGR2RGB);
+            }
+        else{
+            frame = cv::imread(filePath, cv::IMREAD_ANYDEPTH | cv::IMREAD_COLOR);
+            cv::cvtColor(frame, frame, cv::COLOR_BGR2GRAY);
+        }
 
         sdk::SingleFrameOutputs result = pStream->processSingleFrame(
             sdk::RawSourceId::RawSource,
@@ -270,7 +326,7 @@ void changeToLower(string& data){
 }
 int main(int argc, char** argv)
 {
-    if (argc != 8)
+    if (argc != 9)
     {
         std::cerr << "Syntax: ./sdk_sample server_ip frames_folder_path flow_id output_csv_path mean_normalization std_normalization" << std::endl;
         exit(-1);
@@ -279,12 +335,13 @@ int main(int argc, char** argv)
     std::string video_path = static_cast<std::string>(argv[2]);
 
     std::string flow = static_cast<std::string>(argv[3]);
+    std::string terrain = static_cast<std::string>(argv[4]);
     changeToLower(flow);
 
-    std::string csv_output_path = static_cast<std::string>(argv[4]);
-    std::string pixel_avg = static_cast<std::string>(argv[5]);
-    std::string pixel_std = static_cast<std::string>(argv[6]);
-    std::string bit = static_cast<std::string>(argv[7]);
+    std::string csv_output_path = static_cast<std::string>(argv[5]);
+    std::string pixel_avg = static_cast<std::string>(argv[6]);
+    std::string pixel_std = static_cast<std::string>(argv[7]);
+    std::string bit = static_cast<std::string>(argv[8]);
 
     std::cout <<"mean "<< pixel_avg<< std::endl;
     std::cout <<"std "<< pixel_std<< std::endl;
@@ -304,7 +361,7 @@ int main(int argc, char** argv)
     outfile.open(csv_output_path);
 
     try {
-        run(argv[1], video_path, flow,pixel_avg, pixel_std,bit);
+        run(argv[1], video_path, flow, terrain, pixel_avg, pixel_std,bit);
     }
     catch(const std::exception& e){
         std::cout << e.what() << std::endl;

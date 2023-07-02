@@ -1,10 +1,25 @@
 nx_ip = "172.12.10.28"
-#flow_id = "__" #
-create_video = false
+create_video = true
 generate = true
+run_sdk = "both" # possible values: detector , tracker , both
 video_context_id = [
     #"EinYahav_Sbpalmfield_D20211109_Pn2_SSummer_N00076_CtUninhabited_H015_LcSunlight_Ds03000_LtNone_LfPlateaus_VrScrubs_StStaged_LdTopLight_P00_V00_Mc00_B00_Js00_Dr00_T30_TsTrainVald_Set000_flir",
-    "HavatHabaron_D20210824_Pn2_SSummer_N00082_CtUrban_H080_LcDeepTwilight_Ds06000_LtNone_LfPlateaus_VrScrubs_StNatural_LdSideLight_B00_V10_Js00_P00_T25_MWIR_unknown-8bit",
-     "HavatHabaron_D20210824_Pn2_SSummer_N00082_CtUrban_H080_LcDeepTwilight_Ds06000_LtNone_LfPlateaus_VrScrubs_StNatural_LdSideLight_B00_V10_Js00_P00_T25_flir"
+    "Harel_D20211012_115149_SSummer_N00068_CtRustic_H000_LcSunlight_Ds03000_LtNone_LfHills_VrGrassland_StStaged_LdSideLight_B00_V00_Js00_P09_T25_swir",
+    "EinYahav_Sbbigtree_D20211108_Pn2_SSummer_N00011_CtUninhabited_H010_LcSunlight_Ds01500_LtNone_LfHills_VrScrubs_StStaged_LdTopLight_P00_V01_Mc02_B00_Js00_Dr00_T30_TsTrainVald_Set000_flir",
+    "first_location_walking_medium_range_rgb",
+    "ground_vehicle_army_training_vlc-record-2018-03-26-21h07m28s-rtsp___192.168.1__1_.21_voxi.sdp-.mp4_d1158_lwir"
+
 ]
+# LImitiation of script:
+# Video must be in Allegro_Videos database
+# if there is two videos with the same context id . the first video will be taken
+# no tiff images
+
+
 # EinYahav_Sbnearroad_D20211109_Pn2_SSummer_N00051_CtUninhabited_H015_LcFullDaylight_Ds00550_LtNone_LfPlateaus_VrDesert_StTrainVald_LdTopLight_P09_V00_Mc00_B00_Js00_Dr00_T30_TsTrainVald_Set000_rgb
+
+
+# automatic Flow detection ( ground sea ETC)
+# define the graph of the output for a list of alot of videos
+
+
