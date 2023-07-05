@@ -20,7 +20,6 @@ warnings.filterwarnings('ignore')
 # MOT Metrics info:
 # https://pub.towardsai.net/multi-object-tracking-metrics-1e602f364c0c
 # https://github.com/cheind/py-motmetrics/tree/develop
-# TODO chen change paths to new name
 Detection = namedtuple("Detection", ["image_path", "gt", "pred"])
 
 tracker_metrics = ['idf1', 'idp', 'idr', 'recall', 'precision', 'num_unique_objects', 'mostly_tracked',
@@ -44,11 +43,14 @@ def parse_args():
     parser = argparse.ArgumentParser(description="IOU script")
     parser.add_argument('--video_context_id', required=False)
     parser.add_argument('--nx_ip', required=False)
-    parser.add_argument("--flow_id", required=False)
     parser.add_argument("--create_video", required=False)
     return parser.parse_args()
 
 def add_info_to_fail_file(video_id,reason):
+    """
+    Add error to the failed_file in order to not stop the process of multiple videos runs
+
+    """
     failed_file="failed_videos.csv"
     if os.path.exists(failed_file):
         data=pd.read_csv(failed_file)
@@ -60,6 +62,8 @@ def add_info_to_fail_file(video_id,reason):
         data.to_csv(failed_file)
 
 def get_class_codes(db_client):
+    """can be done through the SQL quarry """
+
     quarry = """
     
     Select attribute_name,code,description
@@ -75,6 +79,7 @@ def get_class_codes(db_client):
 
 
 def get_subclass_codes(db_client):
+    """can be done through the SQL quarry """
     quarry = """
     
     Select attribute_name,code,description
@@ -89,6 +94,9 @@ def get_subclass_codes(db_client):
 
 
 def clean_data_gt(gt, db_client):
+    """
+    clean the dataframe of GT
+    """
     class_df = get_class_codes(db_client)
     subclass_df = get_subclass_codes(db_client)
     gt['class_name'] = gt.class_code.apply(lambda x: class_df[x])
@@ -101,6 +109,9 @@ def clean_data_gt(gt, db_client):
 
 
 def get_data_no_context_id(video_id,gk, client):
+    """
+    if video cant be found using the context id of allegro, try in VIDEOS DB
+    """
     query = """ 
                 SELECT dwh.objects.class_code,dwh.objects.subclass_code,
                 dwh.objects.coordinates,dwh.objects.frame_id,
@@ -140,6 +151,10 @@ def get_data_no_context_id(video_id,gk, client):
 
 
 def get_data(video_id):
+    """
+    Get GT of the video
+
+    """
     db_creds = {'user': 'chen-sheiner', 'password': '4kWY05mQQiRcr4BCFqG5',
                 'host': 'database-poc.cgkbiipjug0o.eu-west-1.rds.amazonaws.com', 'db_name': 'SXDBPROD'}
     db_client = DB_Client(db_creds)
@@ -342,35 +357,35 @@ def calc_iou(roi1, roi2):
     return (I / U), U, I
 
 
-def bb_iou_score(box_a, box_b):
-    """ Given two boxes `boxA` and `boxB` defined as a tuple of four numbers:
-        (x1,y1,x2,y2)
-        where:
-            x1,y1 represent the upper left corner
-            x2,y2 represent the lower right corner
-        It returns the Intersect of Union score for these two boxes.
-
-        Args:
-            box_a:          (tuple of 4 numbers) (x1,y1,x2,y2)
-            boxB:          (tuple of 4 numbers) (x1,y1,x2,y2)
-            epsilon:    (float) Small value to prevent division by zero
-
-        Returns:
-            (float) The Intersect of Union score.
-    """
-    box_b = box_b.astype(int)
-    box_a = box_a.astype(int)
-
-    demo_frame_w = max(box_a[0], box_a[2], box_b[0], box_b[2]) + 50
-    demo_frame_h = max(box_a[1], box_a[3], box_b[1], box_b[3]) + 50
-    roi1 = np.zeros((demo_frame_h, demo_frame_w))
-    roi2 = np.zeros((demo_frame_h, demo_frame_w))
-
-    roi1[box_a[1]:box_a[3], box_a[0]:box_a[2]] = 1
-    roi2[box_b[1]:box_b[3], box_b[0]:box_b[2]] = 1
-
-    iou, union_area, intersection = calc_iou(roi1, roi2)
-    return iou, intersection
+# def bb_iou_score(box_a, box_b):
+#     """ Given two boxes `boxA` and `boxB` defined as a tuple of four numbers:
+#         (x1,y1,x2,y2)
+#         where:
+#             x1,y1 represent the upper left corner
+#             x2,y2 represent the lower right corner
+#         It returns the Intersect of Union score for these two boxes.
+#
+#         Args:
+#             box_a:          (tuple of 4 numbers) (x1,y1,x2,y2)
+#             boxB:          (tuple of 4 numbers) (x1,y1,x2,y2)
+#             epsilon:    (float) Small value to prevent division by zero
+#
+#         Returns:
+#             (float) The Intersect of Union score.
+#     """
+#     box_b = box_b.astype(int)
+#     box_a = box_a.astype(int)
+#
+#     demo_frame_w = max(box_a[0], box_a[2], box_b[0], box_b[2]) + 50
+#     demo_frame_h = max(box_a[1], box_a[3], box_b[1], box_b[3]) + 50
+#     roi1 = np.zeros((demo_frame_h, demo_frame_w))
+#     roi2 = np.zeros((demo_frame_h, demo_frame_w))
+#
+#     roi1[box_a[1]:box_a[3], box_a[0]:box_a[2]] = 1
+#     roi2[box_b[1]:box_b[3], box_b[0]:box_b[2]] = 1
+#
+#     iou, union_area, intersection = calc_iou(roi1, roi2)
+#     return iou, intersection
 
 
 def match_tracker_gt(gt_boxes, track_boxes):
@@ -708,11 +723,6 @@ def main():
 if __name__ == "__main__":
     args = parse_args()
     define_options(args)
-    # Extracting relevant arguments
-
-    # For now - comment this line to execute.
-    # This will create detections csv file from the meerkat engine
-    #  generate_detections_csv(nx_ip, path, flow, os.getcwd()+"/test.csv")
     videos_names = opt.video_context_id
 
     if isinstance(videos_names, list):
@@ -732,13 +742,10 @@ if __name__ == "__main__":
     else:
         main()
 
-    # Delete the not necessary files
-    # os.system(f"rm {output_vid_name}.mp4") # TODO: Fix this when the rest is done
+
 
 # The folder we are going to zip is include the followings:
-#   * intersection_over_union.py
-#   * merge_frames.py
-#   * find_boxes_distance.py
+#   * model_performance_data_collection.py
 #   * single frame folder with:
 #       - c++ file
 #       - CMakeList file
@@ -746,11 +753,12 @@ if __name__ == "__main__":
 #                             in case of already built, (i.e. the folder isn't
 #                             empty) - we won't build and run the exe file
 # The flow process:
-# 1. generate detections.csv
-# 2. generate gt.csv (Asaf's script)
-# 2. preprocess frames: zero_padding and merge to mp4
-# 3. start to process the frames with iou and all
-# 4. rm the output.mp4 from the folder
-# 5. making results dir with the ___ name and save there the json and stuff...
-#    (maybe also the output.mp4) and add report of how many frames processed,
-#    How many FP, etc.
+# 1.generate gt.csv from DB
+# 2.download frames form S3
+# 3.generate detections.csv
+# 4.generate tracker.csv
+# 5.match detection and gt
+# 6.create detection_report.csv
+# 7.match tracker and gt
+# 8.create tracker_report.csv
+# 9.if configure, create video of tracks and detections
