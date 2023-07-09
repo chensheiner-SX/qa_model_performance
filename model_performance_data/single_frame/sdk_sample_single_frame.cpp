@@ -306,7 +306,7 @@ void run(
         }
         std::cout << "\r" << fileCounter << " Out of " << files.size() - 2 << std::flush;
         fileCounter++;
-        std::this_thread::sleep_for(std::chrono::milliseconds(30));
+        std::this_thread::sleep_for(std::chrono::milliseconds(150));
     }
 
     std::cout << std::endl;

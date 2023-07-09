@@ -1,4 +1,5 @@
 import os
+import time
 from collections import namedtuple
 import cv2
 import csv
@@ -39,6 +40,15 @@ general_columns_names = ['context_id', 'video_gk', 'bits', 'source_path',
 #                'mostly_lost', 'num_fragmentations', 'motp', 'mota', 'precision', 'recall', 'id_global_assignment',
 #                'idfp', 'idfn', 'idtp', 'idp', 'idr', 'idf1']
 
+def get_time():
+    time_info=time.localtime()
+    date=str(time_info[2])+'/'+str(time_info[1])+'/'+str(time_info[0])
+    time_now=str(time_info[3])+':'+str(time_info[4])+':'+str(time_info[5])
+    return f"{date}_{time_now}"
+
+start_time=get_time()
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description="IOU script")
     parser.add_argument('--video_context_id', required=False)
@@ -52,13 +62,14 @@ def add_info_to_fail_file(video_id,reason):
 
     """
     failed_file="failed_videos.csv"
+    time_now = get_time()
     if os.path.exists(failed_file):
-        data=pd.read_csv(failed_file)
-        data.iloc[len(data)]=[video_id,reason]
+        data=pd.read_csv(failed_file,index_col=0)
+        data.loc[len(data)]=[start_time,time_now,video_id,reason]
         data.to_csv(failed_file)
     else:
-        data=pd.DataFrame(columns=["video_context_id","reason"])
-        data.iloc[len(data)] = [video_id, reason]
+        data=pd.DataFrame(columns=["initial script start time","error time","video_context_id","reason"])
+        data.loc[len(data)] = [start_time,time_now,video_id,reason]
         data.to_csv(failed_file)
 
 def get_class_codes(db_client):
@@ -319,7 +330,7 @@ def get_box_from_detection_csv(norm_values, flow,terrain,bit, run_detector=True)
     extension = os.listdir(video_path)[0].split(".")[1]
     print(f"extention of images:{extension}")
     try:
-        values = norm_values.loc[bit]
+        values = norm_values.loc[str(bit)]
 
     except KeyError:
         print("no correct type of compression in normalization-values database.")
@@ -331,7 +342,7 @@ def get_box_from_detection_csv(norm_values, flow,terrain,bit, run_detector=True)
         generate_detections_csv(opt.nx_ip, video_path, flow, terrain, csv_path_detection, values[0], values[1], bit)
         if  not os.path.exists(csv_path_detection) or os.stat(csv_path_detection).st_size <= 700:
             print("Detection File Creation Failed")
-            add_info_to_fail_file(opt.video_context_i,"Detection File Creation Failed")
+            add_info_to_fail_file(opt.video_context_id,"Detection File Creation Failed")
             return None
         detections_data = pd.read_csv(csv_path_detection)
         return detections_data
@@ -342,7 +353,7 @@ def get_box_from_detection_csv(norm_values, flow,terrain,bit, run_detector=True)
         generate_tracker_csv(opt.nx_ip, video_path, flow, terrain, csv_path_tracker, values[0], values[1], bit)
         if not os.path.exists(csv_path_tracker) or os.stat(csv_path_tracker).st_size <= 700:
             print("Detection File Creation Failed")
-            add_info_to_fail_file(opt.video_context_i, "Detection File Creation Failed")
+            add_info_to_fail_file(opt.video_context_id, "Detection File Creation Failed")
             return None
         tracker_data = pd.read_csv(csv_path_tracker)
         tracker_data = clean_tracker_data(tracker_data)
@@ -355,38 +366,6 @@ def calc_iou(roi1, roi2):
     # +1 for each overlapping white pixel (these will = 2)
     I = len(np.where(roi1 + roi2 == 2)[0])
     return (I / U), U, I
-
-
-# def bb_iou_score(box_a, box_b):
-#     """ Given two boxes `boxA` and `boxB` defined as a tuple of four numbers:
-#         (x1,y1,x2,y2)
-#         where:
-#             x1,y1 represent the upper left corner
-#             x2,y2 represent the lower right corner
-#         It returns the Intersect of Union score for these two boxes.
-#
-#         Args:
-#             box_a:          (tuple of 4 numbers) (x1,y1,x2,y2)
-#             boxB:          (tuple of 4 numbers) (x1,y1,x2,y2)
-#             epsilon:    (float) Small value to prevent division by zero
-#
-#         Returns:
-#             (float) The Intersect of Union score.
-#     """
-#     box_b = box_b.astype(int)
-#     box_a = box_a.astype(int)
-#
-#     demo_frame_w = max(box_a[0], box_a[2], box_b[0], box_b[2]) + 50
-#     demo_frame_h = max(box_a[1], box_a[3], box_b[1], box_b[3]) + 50
-#     roi1 = np.zeros((demo_frame_h, demo_frame_w))
-#     roi2 = np.zeros((demo_frame_h, demo_frame_w))
-#
-#     roi1[box_a[1]:box_a[3], box_a[0]:box_a[2]] = 1
-#     roi2[box_b[1]:box_b[3], box_b[0]:box_b[2]] = 1
-#
-#     iou, union_area, intersection = calc_iou(roi1, roi2)
-#     return iou, intersection
-
 
 def match_tracker_gt(gt_boxes, track_boxes):
     if "index" not in gt_boxes:
@@ -415,11 +394,20 @@ def match_tracker_gt(gt_boxes, track_boxes):
     )
     tdi = []  # Target Detection Indicator
     total_tracks_opened = []  # total_trackes_opened
+    total_tracks_opened_overall = []  # total_trackes_opened per frame
+    total_false_possitives = []  # total_false_possitives per frame
+
     for acc in acc_list:
         data = acc.mot_events.groupby('OId').sum()
         tdi.append(len(len(data) - data[data == 0].dropna()))
         total_tracks_opened.append(len(acc.mot_events.HId.dropna().unique()))
-
+        tracks_opened_per_frame= []  # total_trackes_opened per frame
+        for frame in acc.mot_events.index.get_level_values("FrameId").unique():
+            data = acc.mot_events.loc[frame].groupby("HId").count()
+            tracks_opened_per_frame.append(len(data[data != 0].dropna()))
+        total_tracks_opened_overall.append(sum(tracks_opened_per_frame))
+        total_false_possitives.append(acc.mot_events[acc.mot_events.Type=="FP"].shape[0])
+    summary["MOP"] = np.divide(np.multiply(total_tracks_opened_overall,100),np.add(gt_boxes.shape[0],total_false_possitives))
     summary["TDI"] = tdi
     summary["total_tracks_opened"] = total_tracks_opened
     summary["PD"] = summary["TDI"] / summary["num_unique_objects"]

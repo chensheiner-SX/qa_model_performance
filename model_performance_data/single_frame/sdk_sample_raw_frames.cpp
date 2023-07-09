@@ -176,7 +176,7 @@ void run(
     // start new stream
     sdk::StartStreamConfiguration startConfiguration = pPipeline->createStartStreamConfiguration();
     startConfiguration.getRawSource(); // raw source needs to be 'touched' to enable it, if no internal settings need to be changed
-    startConfiguration.getTelemetry(); // telemetry needs to be 'touched' to enable it if it is going to be used
+//    startConfiguration.getTelemetry(); // telemetry needs to be 'touched' to enable it if it is going to be used
     //startConfiguration.getDebugModule().setEnable(true); // uncomment to enable debug mode; debug data is stored under ~/sightx_debug
 //    startConfiguration.getGstSink().setUrl("rtsp://172.12.10.29:8554/test"); // uncomment to stream preview to url; rtsp server should be available at <ip>
 //    startConfiguration.getPreviewModule().setEnable(true); // uncomment to enable local preview; docker should be able to access X for this to work
@@ -303,17 +303,17 @@ void run(
                         // this frame id is used in track callback
             -1);        // timestamp in ms, if -1 current time is used
 
-        // update telemetry
-        sdk::TelemetryInfo telemetry;
-        telemetry.HorizontalFOVMrads = 10;
-        telemetry.VerticalFOVMrads   = 10;
-
-        pStream->updateTelemetry(
-            telemetry,
-            -1); // timestamp in ms, if -1 current time is used; should match frame timestamps
+//        // update telemetry
+//        sdk::TelemetryInfo telemetry;
+//        telemetry.HorizontalFOVMrads = 10;
+//        telemetry.VerticalFOVMrads   = 10;
+//
+//        pStream->updateTelemetry(
+//            telemetry,
+//            -1); // timestamp in ms, if -1 current time is used; should match frame timestamps
 
         std::this_thread::sleep_for(
-            std::chrono::milliseconds(30));
+            std::chrono::milliseconds(100));
     }
 
     // stop stream (optional, will be destroyed on scope exit)
