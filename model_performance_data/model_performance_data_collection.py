@@ -291,12 +291,12 @@ def clean_tracker_data(data):
     return data
 
 
-def generate_tracker_csv(ip, video_path, flow_id, terrain, output_csv_path, pixel_mean, pixel_std, bit):
+def generate_tracker_csv(sdk,ip, video_path, flow_id, terrain, output_csv_path, pixel_mean, pixel_std, bit):
     if not os.path.exists(output_csv_path) or os.stat(output_csv_path).st_size < 700:
         print(f"{ip} {video_path} {flow_id} {terrain} {output_csv_path} {pixel_mean} {pixel_std} {bit}")
         start = perf_counter()
         os.system(
-            f"single_frame/./sdk_sample_raw_frames {ip} {video_path} {flow_id} {terrain} {output_csv_path} {pixel_mean} {pixel_std} {bit}")
+            f"single_frame_{sdk}/./sdk_sample_raw_frames {ip} {video_path} {flow_id} {terrain} {output_csv_path} {pixel_mean} {pixel_std} {bit}")
         print("Tracker time:", perf_counter() - start)
     else:
         print("Tracker CSV Already Exist")
@@ -304,14 +304,14 @@ def generate_tracker_csv(ip, video_path, flow_id, terrain, output_csv_path, pixe
     if os.stat(output_csv_path).st_size < 700:
         print("Trying to Create Tracker File again")
         os.system(
-            f"single_frame/./sdk_sample_raw_frames {ip} {video_path} {flow_id} {terrain} {output_csv_path} {pixel_mean} {pixel_std} {bit}")
+            f"single_frame_{sdk}/./sdk_sample_raw_frames {ip} {video_path} {flow_id} {terrain} {output_csv_path} {pixel_mean} {pixel_std} {bit}")
 
 
-def generate_detections_csv(ip, video_path, flow_id, terrain ,output_csv_path, pixel_mean, pixel_std, bit):
+def generate_detections_csv(sdk,ip, video_path, flow_id, terrain ,output_csv_path, pixel_mean, pixel_std, bit):
     if not os.path.exists(output_csv_path) or os.stat(output_csv_path).st_size < 700:
         start = perf_counter()
         os.system(
-            f"single_frame/./sdk_sample_single_frame {ip} {video_path} {flow_id} {terrain} {output_csv_path} {pixel_mean} {pixel_std} {bit}")
+            f"single_frame_{sdk}/./sdk_sample_single_frame {ip} {video_path} {flow_id} {terrain} {output_csv_path} {pixel_mean} {pixel_std} {bit}")
         print("Detections time:", perf_counter() - start)
     else:
         print("Detections CSV Already Exist")
@@ -319,10 +319,10 @@ def generate_detections_csv(ip, video_path, flow_id, terrain ,output_csv_path, p
     if os.stat(output_csv_path).st_size < 700:
         print("Trying to Create Detection File again")
         os.system(
-            f"single_frame/./sdk_sample_single_frame {ip} {video_path} {flow_id} {terrain} {output_csv_path} {pixel_mean} {pixel_std} {bit}")
+            f"single_frame_{sdk}/./sdk_sample_single_frame {ip} {video_path} {flow_id} {terrain} {output_csv_path} {pixel_mean} {pixel_std} {bit}")
 
 
-def get_box_from_detection_csv(norm_values, flow,terrain,bit, run_detector=True):
+def get_box_from_detection_csv(norm_values,sdk, flow,terrain,bit, run_detector=True):
     video_path = opt.video_context_id
     if not video_path.endswith('/'):
         video_path += '/'
@@ -339,7 +339,7 @@ def get_box_from_detection_csv(norm_values, flow,terrain,bit, run_detector=True)
 
     if run_detector:
         csv_path_detection = f"{os.getcwd()}/data/detections/{opt.video_context_id}_detections.csv"
-        generate_detections_csv(opt.nx_ip, video_path, flow, terrain, csv_path_detection, values[0], values[1], bit)
+        generate_detections_csv(sdk,opt.nx_ip, video_path, flow, terrain, csv_path_detection, values[0], values[1], bit)
         if  not os.path.exists(csv_path_detection) or os.stat(csv_path_detection).st_size <= 700:
             print("Detection File Creation Failed")
             add_info_to_fail_file(opt.video_context_id,"Detection File Creation Failed")
@@ -350,7 +350,7 @@ def get_box_from_detection_csv(norm_values, flow,terrain,bit, run_detector=True)
     else:
         csv_path_tracker = f"{os.getcwd()}/data/trackers/{opt.video_context_id}_tracker.csv"
         video_path += f"%05d.{extension}"
-        generate_tracker_csv(opt.nx_ip, video_path, flow, terrain, csv_path_tracker, values[0], values[1], bit)
+        generate_tracker_csv(sdk,opt.nx_ip, video_path, flow, terrain, csv_path_tracker, values[0], values[1], bit)
         if not os.path.exists(csv_path_tracker) or os.stat(csv_path_tracker).st_size <= 700:
             print("Detection File Creation Failed")
             add_info_to_fail_file(opt.video_context_id, "Detection File Creation Failed")
@@ -583,10 +583,7 @@ def main():
         gt_boxes, frames_urls = get_box_from_gt_csv()
         if gt_boxes is None:
             return
-        if gt_boxes.sensor_terrain[0] == 'air':
-            print("Merlin SDK isnt implemented yet!")
-            add_info_to_fail_file(opt.video_context_id, "Merlin SDK isnt implemented yet!")
-            return
+
 
             # getting the detection boxes from csv, the format is {frame_id: [(class,x1,y1,x2,y2), ... ] }
         norm_data = get_normalization_data(gt_boxes.payload_code[0], gt_boxes.wavelength_code[0])
@@ -595,8 +592,9 @@ def main():
         bit = gt_boxes.bits[0]
         print(f"Video's Bit is: {bit}")
         terrain = gt_boxes.target_terrain[0]
-        print(f"Video's Terrain is: {terrain}\n")
-
+        print(f"Video's Terrain is: {terrain}")
+        sdk = "merlin" if gt_boxes.sensor_terrain[0]=="air" else "meerkat"
+        print(f"Video's Sdk is: {sdk}\n")
         # Make sure / Download frames of the chosen video
         frames_folder = download_frames(frames_urls)
 
@@ -605,7 +603,7 @@ def main():
 
         if opt.run_sdk in ["both", "detector"]:
             # Run detector sdk
-            detect_boxes = get_box_from_detection_csv(norm_data, flow, terrain,bit, run_detector=True)
+            detect_boxes = get_box_from_detection_csv(norm_data,sdk, flow, terrain,bit, run_detector=True)
             if detect_boxes is None:
                 return
             final_result, acc_list = create_detection_gt_result(gt_boxes, detect_boxes, general_data)
@@ -615,7 +613,7 @@ def main():
 
         if opt.run_sdk in ["both", "tracker"]:
             # Run tracker sdk
-            tracker_boxes = get_box_from_detection_csv(norm_data, flow, terrain,bit, run_detector=False)
+            tracker_boxes = get_box_from_detection_csv(norm_data,sdk, flow, terrain,bit, run_detector=False)
             if tracker_boxes is None:
                 return
             tracker_report = match_tracker_gt(gt_boxes, tracker_boxes)

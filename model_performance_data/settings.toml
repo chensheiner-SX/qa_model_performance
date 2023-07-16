@@ -1,12 +1,18 @@
-nx_ip = "172.12.10.28"
+nx_ip = "172.12.10.5"
 create_video = true
 generate = true
-run_sdk = "tracker" # possible values: detector , tracker , both
+run_sdk = "both" # possible values: detector , tracker , both
 video_context_id = [
 #    "EinYahav_Sbpalmfield_D20211109_Pn2_SSummer_N00076_CtUninhabited_H015_LcSunlight_Ds03000_LtNone_LfPlateaus_VrScrubs_StStaged_LdTopLight_P00_V00_Mc00_B00_Js00_Dr00_T30_TsTrainVald_Set000_flir",
 #    "Harel_D20211012_115149_SSummer_N00068_CtRustic_H000_LcSunlight_Ds03000_LtNone_LfHills_VrGrassland_StStaged_LdSideLight_B00_V00_Js00_P09_T25_swir",
 #    "EinYahav_Sbbigtree_D20211108_Pn2_SSummer_N00011_CtUninhabited_H010_LcSunlight_Ds01500_LtNone_LfHills_VrScrubs_StStaged_LdTopLight_P00_V01_Mc02_B00_Js00_Dr00_T30_TsTrainVald_Set000_flir",
-    "first_location_walking_medium_range_rgb",
+    "KochavMichael_D20220829_flight_2_pt017_MWIR",
+    "KochavMichael_D20220829_flight_2_pt025_VIS",
+    "Elyakim_20220914_1924_0017_T_VOx_lwir",
+    "Elyakim_20220914_1924_0017_W_CMOS_vis",
+
+    "Kalia_20221026_BushesSouth_1920_0012_Z_CMOS_vis",
+    "Kalia_20221026_Bushes_1419_0017_T_VOx_lwir",
 #    "ground_vehicle_army_training_vlc-record-2018-03-26-21h07m28s-rtsp___192.168.1__1_.21_voxi.sdp-.mp4_d1158_lwir",
 #"HavatHabaron_D20210824_Pn2_SSummer_N00082_CtUrban_H080_LcDeepTwilight_Ds06000_LtNone_LfPlateaus_VrScrubs_StNatural_LdSideLight_B00_V10_Js00_P00_T25_flir"
 ]
