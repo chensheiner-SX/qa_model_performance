@@ -1,4 +1,4 @@
-nx_ip = "172.12.10.51"
+nx_ip = "172.12.10.153"
 create_video = true
 generate = true
 run_sdk = "both" # possible values: detector , tracker , both

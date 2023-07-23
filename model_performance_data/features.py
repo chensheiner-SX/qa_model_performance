@@ -19,7 +19,7 @@ class Arguments:
 
 
 class Features:
-    def __init__(self, ip, label_ip, sdk, load_file, video_name_1, video_name_2, video_name_3, video_generate,
+    def __init__(self, ip, label_ip, sdk, load_file, video_name_1, video_name_2, video_name_3,load_3_videos, video_generate,
                  start_run, error):
         self.ip = ip
         self.label_ip = label_ip
@@ -28,6 +28,7 @@ class Features:
         self.video_name_1 = video_name_1
         self.video_name_2 = video_name_2
         self.video_name_3 = video_name_3
+        self.load_3_videos = load_3_videos
         self.video_generate = video_generate
         self.start_run = start_run
         self.error = error
