@@ -653,8 +653,8 @@ def define_options(args):
     Sync argparse arguments and setting file arguments.
 
     """
-    if args.nx_ip != None:
-        opt.set("nx_ip", args.nx_ip)
+    # if args.nx_ip != None:
+    #     opt.set("nx_ip", args.nx_ip)
     if args.video_context_id != None:
         opt.set("video_context_id", args.video_context_id)
     if args.create_video != None:
@@ -693,7 +693,8 @@ def set_options(options):
     opt.set("run_sdk", options.run_sdk)
     opt.set("generate", options.generate)
     opt.set("create_video", options.create_video)
-    opt.set("nx_ip", options.nx_ip)
+    opt.set("merlin_ip", options.merlin_ip)
+    opt.set("meerkat_ip", options.meerkat_ip)
 
 
 def run_script():

@@ -1,5 +1,5 @@
-merlin_ip = "172.12.10.7"
-meerkat_ip = "172.12.10.153"
+merlin_ip = "172.12.10.153"
+meerkat_ip = "172.12.10.7"
 create_video = true
 generate = true
 run_sdk = "both" # possible values: detector , tracker , both

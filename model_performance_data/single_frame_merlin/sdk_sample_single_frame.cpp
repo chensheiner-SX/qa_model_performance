@@ -154,7 +154,6 @@ void run(
     startConfiguration.getRawSource().setReadTimeoutInSec(5); // disable read timeout. Not needed when using single frame mode.
     startConfiguration.getTracksPublisher().setSourceData(sdk::PublisherDataType::Detections);
 
-
     sdk::PixelFormat image_decode=sdk::PixelFormat::RGB8;
     if (flow =="rgb" || flow == "vis"){
         if (terrain=="ground"){
@@ -164,6 +163,8 @@ void run(
                 image_decode=sdk::PixelFormat::RGB16;
             }
             if (stod(pixel_avg)!=-1){
+                startConfiguration.getGroundRgbDetector().clearAveragePixelValue();
+                startConfiguration.getGroundRgbDetector().clearPixelValueStandardDeviation();
                 startConfiguration.getGroundRgbDetector().appendAveragePixelValue(stod(pixel_avg));
                 startConfiguration.getGroundRgbDetector().appendPixelValueStandardDeviation(stod(pixel_std));
             }
@@ -184,7 +185,8 @@ void run(
                 image_decode=sdk::PixelFormat::GRAY16;
             }
             if (stod(pixel_avg)!=-1){
-
+                startConfiguration.getGroundRgbDetector().clearAveragePixelValue();
+                startConfiguration.getGroundRgbDetector().clearPixelValueStandardDeviation();
                 startConfiguration.getGroundMwirDetector().appendAveragePixelValue(stod(pixel_avg));
                 startConfiguration.getGroundMwirDetector().appendPixelValueStandardDeviation(stod(pixel_std));
             }
