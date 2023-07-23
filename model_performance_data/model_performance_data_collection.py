@@ -18,6 +18,9 @@ import warnings
 
 warnings.filterwarnings('ignore')
 
+os.makedirs("data/", exist_ok=True)
+os.makedirs("results/", exist_ok=True)
+
 # MOT Metrics info:
 # https://pub.towardsai.net/multi-object-tracking-metrics-1e602f364c0c
 # https://github.com/cheind/py-motmetrics/tree/develop
@@ -424,10 +427,10 @@ def get_output_from_sdk(norm_values: pd.DataFrame, sdk: str, flow: str, terrain:
         print("no correct type of compression in normalization-values database.")
         print("using the first configuration as values:\n", norm_values.iloc[:1])
         values = norm_values.iloc[0]
-
+    ip = opt.meerkat_ip if sdk == "meerkat" else opt.merlin_ip
     if run_detector:
         csv_path_detection = f"{os.getcwd()}/data/detections/{opt.video_context_id}_detections.csv"
-        generate_detections_csv(sdk, opt.nx_ip, video_path, flow, terrain, csv_path_detection, values[0], values[1],
+        generate_detections_csv(sdk, ip, video_path, flow, terrain, csv_path_detection, values[0], values[1],
                                 bit)
         if not os.path.exists(csv_path_detection) or os.stat(csv_path_detection).st_size <= 700:
             print("Detection File Creation Failed")
@@ -439,7 +442,7 @@ def get_output_from_sdk(norm_values: pd.DataFrame, sdk: str, flow: str, terrain:
     else:
         csv_path_tracker = f"{os.getcwd()}/data/trackers/{opt.video_context_id}_tracker.csv"
         video_path += f"%05d.{extension}"
-        generate_tracker_csv(sdk, opt.nx_ip, video_path, flow, terrain, csv_path_tracker, values[0], values[1], bit)
+        generate_tracker_csv(sdk, ip, video_path, flow, terrain, csv_path_tracker, values[0], values[1], bit)
         if not os.path.exists(csv_path_tracker) or os.stat(csv_path_tracker).st_size <= 700:
             print("Detection File Creation Failed")
             add_info_to_fail_file(opt.video_context_id, "Detection File Creation Failed")

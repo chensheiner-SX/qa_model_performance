@@ -56,7 +56,7 @@ def handle_context_id_file(file_name):
             lines = [x for x in lines if 'Unnamed' not in x]
         else:
             lines = [data.columns[0]] + data.to_numpy().flatten().tolist()
-    return *check_list_for_files(lines), lines
+    return False,"File Loaded Successfully", lines
     # return False,f"Loaded File {file_name}",lines
 
 
@@ -90,12 +90,20 @@ manager = pg_gui.UIManager((800, 600))
 background = pg.Surface((800, 600))
 background.fill(pg.Color('#111111'))
 
-# IP:
-ip = pg_gui.elements.UITextEntryLine(initial_text="172.12.10.5",
+# Merlin IP:
+merlin_ip = pg_gui.elements.UITextEntryLine(initial_text="172.12.10.5",
                                      relative_rect=pg.Rect((160, 50), (150, 40)),
                                      manager=manager)
-label_ip = pg_gui.elements.UILabel(relative_rect=pg.Rect((50, 50), (150, 40)),
-                                   text='NX IP:',
+label_ip_merlin = pg_gui.elements.UILabel(relative_rect=pg.Rect((30, 50), (150, 40)),
+                                   text='Merlin NX IP:',
+                                   manager=manager)
+
+# Meerkat IP:
+meerkat_ip = pg_gui.elements.UITextEntryLine(initial_text="172.12.10.10",
+                                     relative_rect=pg.Rect((160, 100), (150, 40)),
+                                     manager=manager)
+label_ip_meerkat = pg_gui.elements.UILabel(relative_rect=pg.Rect((30, 100), (150, 40)),
+                                   text='Meerkat NX IP:',
                                    manager=manager)
 # SDK Configuration:
 sdk = pg_gui.elements.UIDropDownMenu(options_list=["Detector+Tracker", "Detector", "Tracker"],
@@ -146,9 +154,9 @@ error = pg_gui.elements.UILabel(relative_rect=pg.Rect((50, 500), (500, 40)),
 
 clock = pg.time.Clock()
 is_running = True
-features = Features(ip, label_ip, sdk, load_file, video_name_1, video_name_2, video_name_3,load_3_videos, video_generate,
+features = Features(merlin_ip, label_ip_merlin,meerkat_ip, label_ip_meerkat, sdk, load_file, video_name_1, video_name_2, video_name_3,load_3_videos, video_generate,
                     start_run, error)
-opt = Arguments("127.12.10.5", True, True, "both", [])
+opt = Arguments("127.12.10.5","127.12.10.10", True, True, "both", [])
 while is_running:
     time_delta = clock.tick(60) / 1000.0
     for event in pg.event.get():
@@ -194,9 +202,12 @@ while is_running:
 
         elif event.type == pg_gui.UI_TEXT_ENTRY_FINISHED:
             match event.ui_element:
-                case features.ip:
-                    print("ip", features.ip.text)
-                    opt.nx_ip = features.ip.text
+                case features.merlin_ip:
+                    print("merlin_ip", features.merlin_ip.text)
+                    opt.merlin_ip = features.merlin_ip.text
+                case features.meerkat_ip:
+                    print("ip", features.meerkat_ip.text)
+                    opt.meerkat_ip = features.meerkat_ip.text
                 case features.video_name_1:
                     print("video 1", features.video_name_1.text)
                 case features.video_name_2:
