@@ -355,7 +355,7 @@ def generate_tracker_csv(sdk: str, ip: str, video_path: str,
     :return:
     """
     if not os.path.exists(output_csv_path) or os.stat(output_csv_path).st_size < 700:
-        print(f"{ip} {video_path} {flow_id} {terrain} {output_csv_path} {pixel_mean} {pixel_std} {bit}")
+        print(f"command: \nsingle_frame_{sdk}/./sdk_sample_raw_frames {ip} {video_path} {flow_id} {terrain} {output_csv_path} {pixel_mean} {pixel_std} {bit}")
         start = perf_counter()
         os.system(
             f"single_frame_{sdk}/./sdk_sample_raw_frames {ip} {video_path} {flow_id} {terrain} {output_csv_path} {pixel_mean} {pixel_std} {bit}")
@@ -388,6 +388,8 @@ def generate_detections_csv(sdk: str, ip: str, video_path: str,
     """
     if not os.path.exists(output_csv_path) or os.stat(output_csv_path).st_size < 700:
         start = perf_counter()
+        print(f"command: \nsingle_frame_{sdk}/./sdk_sample_single_frame {ip} {video_path} {flow_id} {terrain} {output_csv_path} {pixel_mean} {pixel_std} {bit}")
+
         os.system(
             f"single_frame_{sdk}/./sdk_sample_single_frame {ip} {video_path} {flow_id} {terrain} {output_csv_path} {pixel_mean} {pixel_std} {bit}")
         print("Detections time:", perf_counter() - start)

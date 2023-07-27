@@ -163,8 +163,8 @@ void run(
                 image_decode=sdk::PixelFormat::RGB16;
             }
             if (stod(pixel_avg)!=-1){
-                startConfiguration.getGroundRgbDetector().clearAveragePixelValue();
-                startConfiguration.getGroundRgbDetector().clearPixelValueStandardDeviation();
+//                startConfiguration.getGroundRgbDetector().clearAveragePixelValue();
+//                startConfiguration.getGroundRgbDetector().clearPixelValueStandardDeviation();
                 startConfiguration.getGroundRgbDetector().appendAveragePixelValue(stod(pixel_avg));
                 startConfiguration.getGroundRgbDetector().appendPixelValueStandardDeviation(stod(pixel_std));
             }
@@ -185,8 +185,8 @@ void run(
                 image_decode=sdk::PixelFormat::GRAY16;
             }
             if (stod(pixel_avg)!=-1){
-                startConfiguration.getGroundRgbDetector().clearAveragePixelValue();
-                startConfiguration.getGroundRgbDetector().clearPixelValueStandardDeviation();
+//                startConfiguration.getGroundRgbDetector().clearAveragePixelValue();
+//                startConfiguration.getGroundRgbDetector().clearPixelValueStandardDeviation();
                 startConfiguration.getGroundMwirDetector().appendAveragePixelValue(stod(pixel_avg));
                 startConfiguration.getGroundMwirDetector().appendPixelValueStandardDeviation(stod(pixel_std));
             }

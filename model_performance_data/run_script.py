@@ -50,12 +50,11 @@ def handle_context_id_file(file_name):
 
 
     elif ".csv" in file_name:
-        data = pd.read_csv(file_name)
-        if data.empty:
-            lines = data.columns.to_list()
-            lines = [x for x in lines if 'Unnamed' not in x]
+        data = pd.read_csv(file_name,header=None)
+        if len(data.columns)>1:
+            lines = data.T[0].str.replace(r'\W','').replace(' ','').to_list()
         else:
-            lines = [data.columns[0]] + data.to_numpy().flatten().tolist()
+            lines = data[0].str.replace(r'\W','').replace(' ','').to_list()
     return False,"File Loaded Successfully", lines
     # return False,f"Loaded File {file_name}",lines
 
@@ -184,7 +183,7 @@ while is_running:
                     data=[features.video_name_1.text,features.video_name_2.text,features.video_name_3.text]
                     drop_index=[]
                     for i in range(len(data)):
-                        if f"Video {i+1}" == data[i]:
+                        if f"Video {i+1}" == data[i] or "" ==data[i]:
                             drop_index.append(i)
                     for i in sorted(drop_index, reverse=True):
                         del data[i]
@@ -200,13 +199,13 @@ while is_running:
                         manager.draw_ui(window_surface)
                         pg.display.update()
 
-        elif event.type == pg_gui.UI_TEXT_ENTRY_FINISHED:
+        elif event.type == pg_gui.UI_TEXT_ENTRY_CHANGED:
             match event.ui_element:
                 case features.merlin_ip:
                     print("merlin_ip", features.merlin_ip.text)
                     opt.merlin_ip = features.merlin_ip.text
                 case features.meerkat_ip:
-                    print("ip", features.meerkat_ip.text)
+                    print("meerkat_ip", features.meerkat_ip.text)
                     opt.meerkat_ip = features.meerkat_ip.text
                 case features.video_name_1:
                     print("video 1", features.video_name_1.text)
